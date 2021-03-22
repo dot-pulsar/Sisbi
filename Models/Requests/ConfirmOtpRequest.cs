@@ -1,6 +1,6 @@
-namespace Models
+namespace Models.Requests
 {
-    public class ConfirmOtp
+    public class ConfirmOtpRequest
     {
         public string Login { get; set; }
         public int Otp { get; set; }

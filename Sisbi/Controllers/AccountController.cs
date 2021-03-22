@@ -7,11 +7,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Models;
 using Models.Entities;
+using Models.Requests;
 using Twilio.Types;
 using Twilio.Rest.Api.V2010.Account;
 using Sisbi.Extensions;
@@ -30,8 +30,8 @@ namespace Sisbi.Controllers
             _emailService = emailService;
         }
 
-        [HttpPost("send_otp")]
-        public async Task<IActionResult> OptAsync(OtpRequest model)
+        [HttpPost("otp/send")]
+        public async Task<IActionResult> SendCodeAsync(SendOtpRequest model)
         {
             var loginType = GetLoginType(model.Login);
 
@@ -44,12 +44,12 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (model.Role == Role.BadRole)
+            if (model.Type == OtpType.BadType)
             {
                 return BadRequest(new
                 {
                     success = false,
-                    description = "The 'role' field is required."
+                    description = "The 'type' field is required."
                 });
             }
 
@@ -66,10 +66,10 @@ namespace Sisbi.Controllers
                     await SisbiContext.CreateAsync<User>(new
                     {
                         phone = model.Login,
-                        role = model.Role,
                         otp,
                         otp_date = now,
-                        otp_retry = 0
+                        otp_retry = 0,
+                        otp_type = model.Type
                     });
                 }
                 else
@@ -77,10 +77,10 @@ namespace Sisbi.Controllers
                     await SisbiContext.CreateAsync<User>(new
                     {
                         email = model.Login,
-                        role = model.Role,
                         otp,
                         otp_date = now,
-                        otp_retry = 0
+                        otp_retry = 0,
+                        otp_type = model.Type
                     });
                 }
 
@@ -93,27 +93,17 @@ namespace Sisbi.Controllers
                 });
             }
 
+            //TODO: Проверка на тип otp
+            
             if (user.otp_date + waitingTime <= now)
             {
-                if (user.AlreadyRegistered)
+                await SisbiContext.UpdateUserAsync(model.Login, loginType, new
                 {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        otp,
-                        otp_date = now,
-                        otp_retry = ++user.otp_retry
-                    });
-                }
-                else
-                {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        role = model.Role,
-                        otp,
-                        otp_date = now,
-                        otp_retry = ++user.otp_retry
-                    });
-                }
+                    otp,
+                    otp_date = now,
+                    otp_retry = ++user.otp_retry,
+                    otp_type = model.Type
+                });
 
                 await SendOtp(otp, model.Login, loginType);
 
@@ -131,8 +121,8 @@ namespace Sisbi.Controllers
             });
         }
 
-        [HttpPost("confirm_otp")]
-        public async Task<IActionResult> ConfirmCodeAsync(ConfirmOtp model)
+        [HttpPost("otp/confirm")]
+        public async Task<IActionResult> ConfirmCodeAsync(ConfirmOtpRequest model)
         {
             var loginType = GetLoginType(model.Login);
 
@@ -211,7 +201,7 @@ namespace Sisbi.Controllers
         }
 
         [HttpPost("signup")]
-        public async Task<IActionResult> SingUpAsync(AuthData model)
+        public async Task<IActionResult> SingUpAsync(SignUpRequest model)
         {
             var loginType = GetLoginType(model.Login);
 
@@ -233,14 +223,32 @@ namespace Sisbi.Controllers
                 });
             }
 
+            if (model.Role == Role.BadRole)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "The 'role' field is required."
+                });
+            }
+
             var user = await SisbiContext.GetUserAsync(model.Login, loginType);
 
-            if (user == null || !user.phone_confirmed && !user.email_confirmed)
+            if (user == null)
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "Account with this login is not confirmed."
+                });
+            }
+
+            if (user.otp_type != OtpType.SignUp)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Otp type mismatch detected."
                 });
             }
 
@@ -257,6 +265,7 @@ namespace Sisbi.Controllers
                         phone_confirmed = true,
                         password = hash,
                         salt,
+                        role = model.Role,
                         registration_date = now
                     });
                 }
@@ -267,6 +276,7 @@ namespace Sisbi.Controllers
                         email_confirmed = true,
                         password = hash,
                         salt,
+                        role = model.Role,
                         registration_date = now
                     });
                 }
@@ -274,7 +284,7 @@ namespace Sisbi.Controllers
                 return Ok(new
                 {
                     success = true,
-                    access_token = GenerateJwt(model.Login, user.role),
+                    access_token = GenerateJwt(model.Login, model.Role),
                     expires_in = now + 40
                 });
             }
@@ -287,7 +297,7 @@ namespace Sisbi.Controllers
         }
 
         [HttpPost("signin")]
-        public async Task<IActionResult> SingInAsync(AuthData model)
+        public async Task<IActionResult> SingInAsync(SignInRequest model)
         {
             var loginType = GetLoginType(model.Login);
 

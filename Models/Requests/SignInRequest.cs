@@ -1,6 +1,6 @@
-namespace Models
+namespace Models.Requests
 {
-    public class AuthData
+    public class SignInRequest
     {
         public string Login { get; set; }
         public string Password { get; set; }

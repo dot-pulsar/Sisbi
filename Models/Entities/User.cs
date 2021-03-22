@@ -13,6 +13,8 @@ namespace Models.Entities
         public int otp { get; set; }
         public long otp_date { get; set; }
         public short otp_retry { get; set; }
+        public OtpType otp_type { get; set; }
+
         public string phone { get; set; }
         public bool phone_confirmed { get; set; }
         public string email { get; set; }

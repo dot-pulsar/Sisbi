@@ -25,8 +25,7 @@ namespace Models
 
         #region CRUD
 
-        public static async Task<IEnumerable<TEntity>> GetAllAsync<TEntity>(
-            string schema = "public")
+        public static async Task<IEnumerable<TEntity>> GetAllAsync<TEntity>(string schema = "public")
         {
             var table = GetTableName<TEntity>();
             var sql = $"SELECT * FROM {schema}.{table}";
@@ -34,9 +33,7 @@ namespace Models
             return await Connection.QueryAsync<TEntity>(sql);
         }
 
-        public static async Task<TEntity> GetAsync<TEntity>(
-            Guid id,
-            string schema = "public")
+        public static async Task<TEntity> GetAsync<TEntity>(Guid id, string schema = "public")
         {
             var table = GetTableName<TEntity>();
             var sql = $"SELECT * FROM {schema}.{table} WHERE id = '{id}'";
@@ -45,9 +42,7 @@ namespace Models
             return await Connection.QuerySingleOrDefaultAsync<TEntity>(sql);
         }
 
-        public static async Task<TEntity> CreateAsync<TEntity>(
-            object param,
-            bool returning = false,
+        public static async Task<TEntity> CreateAsync<TEntity>(object param, bool returning = false,
             string schema = "public")
         {
             var table = GetTableName<TEntity>();
@@ -99,10 +94,7 @@ namespace Models
             return await Connection.QuerySingleOrDefaultAsync<TEntity>(sql.ToString());
         }
 
-        public static async Task<TEntity> UpdateAsync<TEntity>(
-            Guid id,
-            object param,
-            bool returning = false,
+        public static async Task<TEntity> UpdateAsync<TEntity>(Guid id, object param, bool returning = false,
             string schema = "public")
         {
             var table = GetTableName<TEntity>();
@@ -120,9 +112,7 @@ namespace Models
             return await Connection.QuerySingleOrDefaultAsync<TEntity>(sql.ToString());
         }
 
-        public static async Task DeleteAsync<TEntity>(
-            Guid id,
-            string schema = "public")
+        public static async Task DeleteAsync<TEntity>(Guid id, string schema = "public")
         {
             var table = GetTableName<TEntity>();
             var sql = $"DELETE FROM {schema}.{table} WHERE id = '{id}'";

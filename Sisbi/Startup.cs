@@ -85,6 +85,7 @@ namespace Sisbi
         {
             var accountSid = Configuration["TwilioSettings:AccountSid"];
             var authToken = Configuration["TwilioSettings:AuthToken"];
+            
             TwilioClient.Init(accountSid, authToken);
         }
     }
