@@ -1,6 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using AspNet.Security.OAuth.Vkontakte;
+using Dapper;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -21,16 +28,28 @@ namespace Sisbi
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
+            DefaultTypeMap.MatchNamesWithUnderscores = true;
         }
 
         public IConfiguration Configuration { get; }
 
         public void ConfigureServices(IServiceCollection services)
         {
+
+            var authConfig = Configuration.GetSection("Authentication");
+
+            services.AddHttpClient<VkontakteService>()
+                .ConfigurePrimaryHttpMessageHandler(() =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = true,
+                        UseDefaultCredentials = true
+                    });
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
-                    options.RequireHttpsMetadata = false;
+                    options.RequireHttpsMetadata = true;
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
@@ -48,7 +67,7 @@ namespace Sisbi
                 .AddControllers()
                 .AddJsonOptions(o =>
                 {
-                    o.JsonSerializerOptions.IgnoreNullValues = true;
+                    //o.JsonSerializerOptions.IgnoreNullValues = true;
                     o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
 
@@ -56,7 +75,7 @@ namespace Sisbi
 
             services.Configure<TwilioSettings>(Configuration.GetSection("TwilioSettings"));
             services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
-            
+
             services.AddTransient<IEmailService, EmailService>();
         }
 
@@ -68,9 +87,9 @@ namespace Sisbi
                 app.UseSwagger();
                 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Sisbi v1"));
             }
-            
+
             ConfigureTwilio();
-            
+
             app.UseHttpsRedirection();
 
             app.UseRouting();
@@ -85,7 +104,7 @@ namespace Sisbi
         {
             var accountSid = Configuration["TwilioSettings:AccountSid"];
             var authToken = Configuration["TwilioSettings:AuthToken"];
-            
+
             TwilioClient.Init(accountSid, authToken);
         }
     }

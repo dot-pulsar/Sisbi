@@ -28,6 +28,9 @@
 | phone_confirmed   | boolean | &cross;  | false              |
 
 
+1) Индикация обработки вакансии/резюме
+2) Добавить место работы
+
 ~~~ html
 <meta property="og:title" content="Пример заголовка статьи">
 <meta property="og:site_name" content="название сайта">
@@ -35,4 +38,103 @@
 <meta property="og:url" content="http://example.com/пример-заголовка-статьи">
 <meta property="og:image" content="http://example.com/картинка_статьи.jpg">
 <meta property="og:description" content="Краткое описание статьи.">
+~~~
+
+
+
+~~~ c#
+#region External Login
+
+[HttpGet, Route("login")]
+public async Task<IActionResult> LoginEL()
+{
+    return Ok(await _vkontakteService.Get());
+}
+
+[HttpGet, Route("response")]
+public async Task<IActionResult> ResponseEL(string code = null)
+{
+    var clientId = "7799405";
+    var clientSecret = "a8x3WZSTxIvU1lHknRQr";
+    var redirectUri = "https://localhost:5001/account/response";
+
+    var uri =
+        $"https://oauth.vk.com/access_token?client_id={clientId}&client_secret={clientSecret}&redirect_uri={redirectUri}&code={code}";
+    return Redirect(uri);
+}
+
+[Route("google-login")]
+public IActionResult GoogleLogin()
+{
+    var properties = new AuthenticationProperties {RedirectUri = Url.Action("GoogleResponse")};
+    return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+}
+
+[Route("google-response")]
+public async Task<IActionResult> GoogleResponse()
+{
+    var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    if (result.Principal != null)
+    {
+        var claims = result
+            .Principal
+            .Identities
+            .FirstOrDefault()
+            ?.Claims.Select(claim => new
+            {
+                claim.Issuer,
+                claim.OriginalIssuer,
+                claim.Type,
+                claim.Value
+            });
+
+        return Ok(claims);
+    }
+
+    return BadRequest(new
+    {
+        success = false,
+        description = "You are not logged in with google."
+    });
+}
+
+[Route("vk-login")]
+public IActionResult VkLogin()
+{
+    var properties = new AuthenticationProperties {RedirectUri = Url.Action("VkResponse")};
+
+    return Challenge(properties, VkontakteAuthenticationDefaults.AuthenticationScheme);
+}
+
+[Route("vk-response")]
+public async Task<IActionResult> VkResponse()
+{
+    var result = await HttpContext.AuthenticateAsync(VkontakteAuthenticationDefaults.AuthenticationScheme);
+
+    if (result.Principal != null)
+    {
+        var claims = result
+            .Principal
+            .Identities
+            .FirstOrDefault()
+            ?.Claims.Select(claim => new
+            {
+                claim.Issuer,
+                claim.OriginalIssuer,
+                claim.Type,
+                claim.Value
+            });
+
+        return Ok(claims);
+    }
+
+    return BadRequest(new
+    {
+        success = false,
+        description = "You are not logged in with google."
+    });
+}
+
+#endregion
 ~~~

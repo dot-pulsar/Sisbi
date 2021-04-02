@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Models;
@@ -15,6 +16,7 @@ using Models.Requests;
 using Twilio.Types;
 using Twilio.Rest.Api.V2010.Account;
 using Sisbi.Extensions;
+using Sisbi.Services;
 using Sisbi.Services.Contracts;
 
 namespace Sisbi.Controllers
@@ -24,13 +26,17 @@ namespace Sisbi.Controllers
     public class AccountController : ControllerBase
     {
         private readonly IEmailService _emailService;
+        private readonly VkontakteService _vkontakteService;
 
-        public AccountController(IEmailService emailService)
+        public AccountController(IEmailService emailService, VkontakteService vkontakteService)
         {
             _emailService = emailService;
+            _vkontakteService = vkontakteService;
         }
 
-        [HttpPost("otp/send")]
+        #region Default
+
+        [AllowAnonymous, HttpPost("otp/send")]
         public async Task<IActionResult> SendCodeAsync(SendOtpRequest model)
         {
             var loginType = GetLoginType(model.Login);
@@ -94,14 +100,14 @@ namespace Sisbi.Controllers
             }
 
             //TODO: Проверка на тип otp
-            
-            if (user.otp_date + waitingTime <= now)
+
+            if (user.OtpDate + waitingTime <= now)
             {
                 await SisbiContext.UpdateUserAsync(model.Login, loginType, new
                 {
                     otp,
                     otp_date = now,
-                    otp_retry = ++user.otp_retry,
+                    otp_retry = ++user.OtpRetry,
                     otp_type = model.Type
                 });
 
@@ -117,11 +123,11 @@ namespace Sisbi.Controllers
             return BadRequest(new
             {
                 success = false,
-                next_retry_timestamp = user.otp_date + waitingTime
+                next_retry_timestamp = user.OtpDate + waitingTime
             });
         }
 
-        [HttpPost("otp/confirm")]
+        [AllowAnonymous, HttpPost("otp/confirm")]
         public async Task<IActionResult> ConfirmCodeAsync(ConfirmOtpRequest model)
         {
             var loginType = GetLoginType(model.Login);
@@ -155,7 +161,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (user.otp == 0)
+            if (user.Otp == 0)
             {
                 return BadRequest(new
                 {
@@ -164,7 +170,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (user.otp == model.Otp)
+            if (user.Otp == model.Otp)
             {
                 if (loginType == LoginType.Phone)
                 {
@@ -200,7 +206,7 @@ namespace Sisbi.Controllers
             });
         }
 
-        [HttpPost("signup")]
+        [AllowAnonymous, HttpPost("signup")]
         public async Task<IActionResult> SingUpAsync(SignUpRequest model)
         {
             var loginType = GetLoginType(model.Login);
@@ -243,7 +249,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (user.otp_type != OtpType.SignUp)
+            if (user.OtpType != OtpType.SignUp)
             {
                 return BadRequest(new
                 {
@@ -260,31 +266,31 @@ namespace Sisbi.Controllers
 
                 if (loginType == LoginType.Phone)
                 {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
+                    user = await SisbiContext.UpdateUserAsync(model.Login, loginType, new
                     {
                         phone_confirmed = true,
                         password = hash,
                         salt,
                         role = model.Role,
                         registration_date = now
-                    });
+                    }, returning: true);
                 }
                 else
                 {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
+                    user = await SisbiContext.UpdateUserAsync(model.Login, loginType, new
                     {
                         email_confirmed = true,
                         password = hash,
                         salt,
                         role = model.Role,
                         registration_date = now
-                    });
+                    }, returning: true);
                 }
 
                 return Ok(new
                 {
                     success = true,
-                    access_token = GenerateJwt(model.Login, model.Role),
+                    access_token = GenerateJwt(user.Id, model.Role),
                     expires_in = now + 40
                 });
             }
@@ -296,7 +302,7 @@ namespace Sisbi.Controllers
             });
         }
 
-        [HttpPost("signin")]
+        [AllowAnonymous, HttpPost("signin")]
         public async Task<IActionResult> SingInAsync(SignInRequest model)
         {
             var loginType = GetLoginType(model.Login);
@@ -321,7 +327,7 @@ namespace Sisbi.Controllers
 
             var user = await SisbiContext.GetUserAsync(model.Login, loginType);
 
-            if (user == null || await Sha512Async(model.Password, user.salt) != user.password)
+            if (user == null || await Sha512Async(model.Password, user.Salt) != user.Password)
             {
                 return BadRequest(new
                 {
@@ -333,12 +339,12 @@ namespace Sisbi.Controllers
             return Ok(new
             {
                 success = true,
-                access_token = GenerateJwt(model.Login, user.role),
+                access_token = GenerateJwt(user.Id, user.Role),
                 expires_in = DateTime.UtcNow.ToUnixTime() + 40
             });
         }
 
-        [HttpPost("password/change")]
+        [Authorize, HttpPost("password/change")]
         public async Task<IActionResult> ChangePassword(ChangePasswordRequest model)
         {
             var loginType = GetLoginType(model.Login);
@@ -381,7 +387,7 @@ namespace Sisbi.Controllers
 
             var user = await SisbiContext.GetUserAsync(model.Login, loginType);
 
-            if (user == null || await Sha512Async(model.Password, user.salt) != user.password)
+            if (user == null || await Sha512Async(model.Password, user.Salt) != user.Password)
             {
                 return BadRequest(new
                 {
@@ -393,7 +399,7 @@ namespace Sisbi.Controllers
             var salt = GenerateSalt();
             var newPassword = await Sha512Async(model.NewPassword, salt);
 
-            await SisbiContext.UpdateAsync<User>(user.id, new
+            await SisbiContext.UpdateAsync<User>(user.Id, new
             {
                 password = newPassword,
                 salt
@@ -405,8 +411,8 @@ namespace Sisbi.Controllers
             });
         }
 
-        /*[Authorize, HttpPost("password/restore")]
-        public async Task<IActionResult> RestorePassword(AuthData model)
+        [AllowAnonymous, HttpPost("password/restore")]
+        public async Task<IActionResult> RestorePassword(RestorePasswordRequest model)
         {
             var loginType = GetLoginType(model.Login);
 
@@ -430,22 +436,33 @@ namespace Sisbi.Controllers
 
             var user = await SisbiContext.GetUserAsync(model.Login, loginType);
 
-            if (user == null || await Sha512Async(model.Password, user.salt) != user.password)
+            if (user == null)
             {
                 return BadRequest(new
                 {
                     success = false,
-                    description = "Wrong login or password."
+                    description = "Account not found."
                 });
             }
+
+            var salt = GenerateSalt();
+            var newPassword = await Sha512Async(model.Password, salt);
+
+            await SisbiContext.UpdateAsync<User>(user.Id, new
+            {
+                password = newPassword,
+                salt
+            });
 
             return Ok(new
             {
                 success = true,
-                access_token = GenerateJwt(model.Login, user.role),
+                access_token = GenerateJwt(user.Id, user.Role),
                 expires_in = DateTime.UtcNow.ToUnixTime() + 40
             });
-        }*/
+        }
+
+        #endregion
 
         #region Other
 
@@ -477,10 +494,10 @@ namespace Sisbi.Controllers
         }
 
         [NonAction]
-        private static string GenerateJwt(string login, Role role)
+        private static string GenerateJwt(Guid id, Role role)
         {
             var now = DateTime.UtcNow;
-            var identity = GetIdentity(login, role);
+            var identity = GetIdentity(id, role);
 
             var secretKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes("superSecretKey@345"));
             var signinCredentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
@@ -489,7 +506,7 @@ namespace Sisbi.Controllers
                 issuer: "http://localhost:5000",
                 audience: "http://localhost:5000",
                 notBefore: now,
-                expires: now.Add(TimeSpan.FromSeconds(40)),
+                expires: now.Add(TimeSpan.FromHours(40)),
                 claims: identity.Claims,
                 signingCredentials: signinCredentials
             );
@@ -498,11 +515,11 @@ namespace Sisbi.Controllers
         }
 
         [NonAction]
-        private static ClaimsIdentity GetIdentity(string login, Role role)
+        private static ClaimsIdentity GetIdentity(Guid id, Role role)
         {
             var claims = new List<Claim>
             {
-                new(ClaimsIdentity.DefaultNameClaimType, login),
+                new("id", id.ToString()),
                 new(ClaimsIdentity.DefaultRoleClaimType, role.ToString())
             };
 

@@ -62,14 +62,17 @@ namespace Models
 
                 if (value == null)
                 {
-                    throw new ArgumentNullException();
+                    values.Append("NULL");
                 }
-
-                if (info.PropertyType == typeof(string))
+                else if (info.PropertyType == typeof(string))
                 {
                     values.Append((string) value == "NULL" ? "NULL" : $"'{value}'");
                 }
                 else if (info.PropertyType.IsEnum)
+                {
+                    values.Append($"'{value}'");
+                }
+                else if (info.PropertyType == typeof(Guid))
                 {
                     values.Append($"'{value}'");
                 }
@@ -204,6 +207,10 @@ namespace Models
                     sql.Append((string) value == "NULL" ? $"{name} = {value}" : $"{name} = '{value}'");
                 }
                 else if (infoType.IsEnum)
+                {
+                    sql.Append($"{name} = '{value}'");
+                }
+                else if (infoType == typeof(Guid))
                 {
                     sql.Append($"{name} = '{value}'");
                 }

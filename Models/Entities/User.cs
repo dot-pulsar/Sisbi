@@ -1,29 +1,29 @@
 using System;
+using Models.Enums;
 
 namespace Models.Entities
 {
     public class User
     {
-        public Guid id { get; set; }
-        public string first_name { get; set; }
-        public string second_name { get; set; }
-        public string middle_name { get; set; }
-        public long date_of_birth { get; set; }
-        public string address { get; set; }
-        public int otp { get; set; }
-        public long otp_date { get; set; }
-        public short otp_retry { get; set; }
-        public OtpType otp_type { get; set; }
+        public Guid Id { get; set; }
+        public string FirstName { get; set; }
+        public string SecondName { get; set; }
+        public Gender Gender { get; set; }
+        public string BDate { get; set; }
+        public string Address { get; set; }
+        public int Otp { get; set; }
+        public long OtpDate { get; set; }
+        public short OtpRetry { get; set; }
+        public OtpType OtpType { get; set; }
+        public string Phone { get; set; }
+        public bool PhoneConfirmed { get; set; }
+        public string Email { get; set; }
+        public bool EmailConfirmed { get; set; }
+        public string Password { get; set; }
+        public string Salt { get; set; }
+        public Role Role { get; set; }
+        public long RegistrationDate { get; set; }
 
-        public string phone { get; set; }
-        public bool phone_confirmed { get; set; }
-        public string email { get; set; }
-        public bool email_confirmed { get; set; }
-        public string password { get; set; }
-        public string salt { get; set; }
-        public Role role { get; set; }
-        public long registration_date { get; set; }
-
-        public bool AlreadyRegistered => registration_date != 0;
+        public bool AlreadyRegistered => RegistrationDate != 0;
     }
 }
