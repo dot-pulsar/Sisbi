@@ -18,27 +18,34 @@ namespace Sisbi.Controllers
     [Route("[controller]")]
     public class ProfileController : ControllerBase
     {
-        //TODO:// Добавить маппинг
+        private readonly SisbiContext _context;
 
+        public ProfileController(SisbiContext context)
+        {
+            _context = context;
+        }
+        
         [Authorize, HttpGet]
         public async Task<IActionResult> Get()
         {
             var userId = User.Id();
-            var user = await SisbiContext.GetAsync<User>(userId);
-            return Ok(new Profile
+            var user = await _context.Users.FindAsync(userId);
+            
+            return Ok(new
             {
-                Id = user.Id,
-                Role = user.Role,
-                FirstName = user.FirstName,
-                SecondName = user.SecondName,
-                Gender = user.Gender,
-                BDate = user.BDate,
-                Address = user.Address,
-                Email = user.Email,
-                EmailConfirmed = user.EmailConfirmed,
-                Phone = user.Phone,
-                PhoneConfirmed = user.PhoneConfirmed,
-                RegistrationDate = user.RegistrationDate
+                success = true,
+                id = user.Id,
+                role = user.Role,
+                first_name = user.FirstName,
+                second_name = user.SecondName,
+                gender = user.Gender,
+                bdate = user.BDate,
+                address = user.Address,
+                email = user.Email,
+                email_confirmed = user.EmailConfirmed,
+                phone = user.Phone,
+                phone_confirmed = user.PhoneConfirmed,
+                registration_date = user.RegistrationDate
             });
         }
 
@@ -55,30 +62,31 @@ namespace Sisbi.Controllers
             }
 
             var userId = User.Id();
+            var user = await _context.Users.FindAsync(userId);
 
-            var user = await SisbiContext.UpdateAsync<User>(userId, new
-            {
-                first_name = body.FirstName,
-                second_name = body.SecondName,
-                gender = body.Gender,
-                bdate = body.BDate,
-                address = body.Address
-            }, returning: true);
+            user.FirstName = body.FirstName;
+            user.SecondName = body.SecondName;
+            user.Gender = body.Gender;
+            user.BDate = body.BDate;
+            user.Address = body.Address;
 
-            return Ok(new Profile
+            await _context.SaveChangesAsync();
+            
+            return Ok(new
             {
-                Id = user.Id,
-                Role = user.Role,
-                FirstName = user.FirstName,
-                SecondName = user.SecondName,
-                Gender = user.Gender,
-                BDate = user.BDate,
-                Address = user.Address,
-                Email = user.Email,
-                EmailConfirmed = user.EmailConfirmed,
-                Phone = user.Phone,
-                PhoneConfirmed = user.PhoneConfirmed,
-                RegistrationDate = user.RegistrationDate
+                success = true,
+                id = user.Id,
+                role = user.Role,
+                first_name = user.FirstName,
+                second_name = user.SecondName,
+                gender = user.Gender,
+                bdate = user.BDate,
+                address = user.Address,
+                email = user.Email,
+                email_confirmed = user.EmailConfirmed,
+                phone = user.Phone,
+                phone_confirmed = user.PhoneConfirmed,
+                registration_date = user.RegistrationDate
             });
         }
 

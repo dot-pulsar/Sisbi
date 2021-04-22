@@ -5,8 +5,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Models.Entities
 {
-    [Table("resume")]
-    public class Resume
+    [Table("vacancy")]
+    public class Vacancy
     {
         [Column("id")] public Guid Id { get; set; }
         [Column("position")] public string Position { get; set; }
@@ -19,6 +19,5 @@ namespace Models.Entities
         [Column("user_id")] public Guid UserId { get; set; }
 
         public virtual City City { get; set; }
-        public virtual ICollection<PlaceOfWork> PlaceOfWorks { get; set; }
     }
 }

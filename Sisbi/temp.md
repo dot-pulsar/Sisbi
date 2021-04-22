@@ -1,6 +1,7 @@
 # Sisbi.ru
 
 ## Защита
+
 - [ ] SSL
 - [ ] JWT
 - [ ] Хэширование пароля SHA-512 + соль
@@ -10,6 +11,7 @@
 ## База данных
 
 ### Profile
+
 | Name              | Type    | NOT NULL | Default            |
 | ----------------- | ------- | -------- | ------------------ |
 | id                | uuid    | &check;  | uuid_generate_v4() |
@@ -27,9 +29,34 @@
 | email_confirmed   | boolean | &cross;  | false              |
 | phone_confirmed   | boolean | &cross;  | false              |
 
+### Access
+
+| Role          | GET     |  POST    | PUT     | DELETE     |
+|:--------------|:--------|:---------|:--------|:-----------|
+| Worker        | &check; | &cross;  | &cross; | &cross;    |
+| Employer      | &check; | &cross;  | &cross; | &cross;    |
+| Moderator     | &check; | &cross;  | &cross; | &cross;    |
+| Administrator | &check; | &cross;  | &cross; | &cross;    |
 
 1) Индикация обработки вакансии/резюме
 2) Добавить место работы
+3) Поиск вакансий/резюме. `.../resumes?name=&city_id=&work_experience=&salary_min=&salary_max=`
+4) Избранное
+5) Отклики
+6) Получать контакты
+7) Добавить OrderBy `(Skip/Take)`
+
+- api/v1/account/otp/send
+- api/v1/account/otp/confirm
+- api/v1/account/password/change
+- api/v1/account/password/restore
+- api/v1/account/signup
+- api/v1/account/signin
+
+- api/v1/city
+- api/v1/worker/places_of_work
+- api/v1/worker/resumes
+- api/v1/employer/resumes
 
 ~~~ html
 <meta property="og:title" content="Пример заголовка статьи">
@@ -39,8 +66,6 @@
 <meta property="og:image" content="http://example.com/картинка_статьи.jpg">
 <meta property="og:description" content="Краткое описание статьи.">
 ~~~
-
-
 
 ~~~ c#
 #region External Login

@@ -3,27 +3,42 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Dapper;
+using Microsoft.EntityFrameworkCore;
 using Models.Entities;
 using Npgsql;
 using Org.BouncyCastle.Math.EC.Multiplier;
 
 namespace Models
 {
-    public static class SisbiContext
+    public class SisbiContext : DbContext
     {
-        private const string ConnectionString =
-            "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";
+        public SisbiContext(DbContextOptions<SisbiContext> options) : base(options)
+        {
+        }
 
-        public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
+        public DbSet<User> Users { get; set; }
+        public DbSet<City> Cities { get; set; }
+        public DbSet<PlaceOfWork> PlacesOfWork { get; set; }
+        public DbSet<Resume> Resumes { get; set; }
+        public DbSet<Vacancy> Vacancies { get; set; }
+        public DbSet<FavoriteResume> FavoriteResumes { get; set; }
+        public DbSet<FavoriteVacancy> FavoriteVacancies { get; set; }
+        public DbSet<Response> Responses { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+        /*private const string ConnectionString =
+            "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";*/
+
+        /*public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
 
         private static NpgsqlConnection GetPostgresConnection()
         {
             var connection = new NpgsqlConnection(ConnectionString);
             connection.Open();
             return connection;
-        }
+        }*/
 
-        #region CRUD
+        /*#region CRUD
 
         public static async Task<IEnumerable<TEntity>> GetAllAsync<TEntity>(string schema = "public")
         {
@@ -223,6 +238,6 @@ namespace Models
             }
         }
 
-        #endregion
+        #endregion*/
     }
 }

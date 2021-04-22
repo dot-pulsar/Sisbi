@@ -11,11 +11,13 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Models;
 using Sisbi.Services;
 using Sisbi.Services.Contracts;
 using Sisbi.Settings;
@@ -35,6 +37,8 @@ namespace Sisbi
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddDbContext<SisbiContext>(options =>
+                options.UseLazyLoadingProxies().UseNpgsql(Configuration.GetConnectionString("DefaultConnection")));
 
             var authConfig = Configuration.GetSection("Authentication");
 
@@ -90,7 +94,7 @@ namespace Sisbi
 
             ConfigureTwilio();
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseRouting();
 

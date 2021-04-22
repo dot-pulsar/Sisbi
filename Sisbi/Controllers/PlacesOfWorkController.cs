@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
 using Models.Requests;
@@ -16,23 +17,31 @@ namespace Sisbi.Controllers
     [ApiController]
     public class PlacesOfWorkController : ControllerBase
     {
+        private readonly SisbiContext _context;
+
+        public PlacesOfWorkController(SisbiContext context)
+        {
+            _context = context;
+        }
+
         [Authorize(Roles = "Worker"), HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var userId = User.Id();
 
-            var pow = await SisbiContext.Connection.QueryAsync<PlaceOfWork>(
-                $"SELECT pow.* FROM place_of_work pow LEFT JOIN resume r on pow.resume_id = r.id WHERE r.user_id = '{userId}'");
+            var pow = await _context.PlacesOfWork
+                .Where(p => p.Resume.UserId == userId)
+                .ToListAsync();
 
             var powResult = pow.Select(place => new
                 {
-                    Id = place.Id,
-                    Position = place.Position,
-                    Company = place.Company,
-                    Description = place.Description,
-                    StartDate = place.StartDate,
-                    EndDate = place.EndDate,
-                    ResumeId = place.ResumeId
+                    id = place.Id,
+                    position = place.Position,
+                    company = place.Company,
+                    description = place.Description,
+                    start_date = place.StartDate,
+                    end_date = place.EndDate,
+                    resume_id = place.ResumeId
                 })
                 .ToList();
 
@@ -46,8 +55,7 @@ namespace Sisbi.Controllers
         [AllowAnonymous, HttpGet("{id}")]
         public async Task<IActionResult> Get(Guid id)
         {
-            var pow = await SisbiContext.Connection.QuerySingleOrDefaultAsync<PlaceOfWork>(
-                $"SELECT * FROM place_of_work WHERE id = '{id}'");
+            var pow = await _context.PlacesOfWork.FindAsync(id);
 
             if (pow != null)
             {
@@ -166,7 +174,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var resume = await SisbiContext.GetAsync<Resume>(body.ResumeId);
+            var resume = await _context.Resumes.FindAsync(body.ResumeId);
             if (resume == null)
             {
                 return BadRequest(new
@@ -187,15 +195,18 @@ namespace Sisbi.Controllers
 
             #endregion
 
-            var pow = await SisbiContext.CreateAsync<PlaceOfWork>(new
+            var pow = new PlaceOfWork
             {
-                position = body.Position,
-                company = body.Company,
-                description = body.Description,
-                start_date = body.StartDate,
-                end_date = body.EndDate,
-                resume_id = body.ResumeId
-            }, returning: true);
+                Position = body.Position,
+                Company = body.Company,
+                Description = body.Description,
+                StartDate = body.StartDate,
+                EndDate = body.EndDate,
+                ResumeId = body.ResumeId
+            };
+
+            await _context.PlacesOfWork.AddAsync(pow);
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -305,7 +316,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var pow = await SisbiContext.GetAsync<PlaceOfWork>(id);
+            var pow = await _context.PlacesOfWork.FindAsync(id);
 
             if (pow == null)
             {
@@ -316,7 +327,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var resume = await SisbiContext.GetAsync<Resume>(body.ResumeId);
+            var resume = await _context.Resumes.FindAsync(body.ResumeId);
             if (resume == null)
             {
                 return BadRequest(new
@@ -337,15 +348,14 @@ namespace Sisbi.Controllers
 
             #endregion
 
-            pow = await SisbiContext.UpdateAsync<PlaceOfWork>(id, new
-            {
-                position = body.Position,
-                company = body.Company,
-                description = body.Description,
-                start_date = body.StartDate,
-                end_date = body.EndDate,
-                resume_id = body.ResumeId
-            }, returning: true);
+            pow.Position = body.Position;
+            pow.Company = body.Company;
+            pow.Description = body.Description;
+            pow.StartDate = body.StartDate;
+            pow.EndDate = body.EndDate;
+            pow.ResumeId = body.ResumeId;
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -365,14 +375,9 @@ namespace Sisbi.Controllers
         {
             var userId = User.Id();
 
-            var pow = await SisbiContext.Connection.QuerySingleOrDefaultAsync(
-                $"SELECT * FROM place_of_work pow LEFT JOIN resume r on pow.resume_id = r.id WHERE pow.id = '{id}' AND r.user_id = '{userId}'");
-
-            if (pow != null)
-            {
-                await SisbiContext.DeleteAsync<PlaceOfWork>(id);
-            }
-            else
+            var pow = await _context.PlacesOfWork.FindAsync(id);
+            
+            if (pow == null)
             {
                 return BadRequest(new
                 {
@@ -381,12 +386,24 @@ namespace Sisbi.Controllers
                 });
             }
 
+            if (pow.Resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this place_of_work_id"
+                });
+            }
+
+            _context.PlacesOfWork.Remove(pow);
+            
             return Ok(new
             {
                 success = true
             });
         }
-        
+
+        [NonAction]
         private static bool IsDateValid(string date)
         {
             var format = "MM-yyyy";
@@ -395,6 +412,8 @@ namespace Sisbi.Controllers
 
             return DateTime.TryParseExact(date, format, provider, style, out var temp);
         }
+
+        [NonAction]
         private static DateTime ParseDateTime(string date)
         {
             var format = "MM-yyyy";

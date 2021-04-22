@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,10 +10,12 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Models;
 using Models.Entities;
 using Models.Requests;
+using Newtonsoft.Json;
 using Twilio.Types;
 using Twilio.Rest.Api.V2010.Account;
 using Sisbi.Extensions;
@@ -27,14 +30,26 @@ namespace Sisbi.Controllers
     {
         private readonly IEmailService _emailService;
         private readonly VkontakteService _vkontakteService;
+        private readonly SisbiContext _context;
 
-        public AccountController(IEmailService emailService, VkontakteService vkontakteService)
+        public AccountController(IEmailService emailService, VkontakteService vkontakteService, SisbiContext context)
         {
             _emailService = emailService;
             _vkontakteService = vkontakteService;
+            _context = context;
         }
 
         #region Default
+
+        public async Task<User> GetUserAsync(string login, LoginType loginType)
+        {
+            if (loginType == LoginType.Phone)
+            {
+                return await _context.Users.SingleOrDefaultAsync(u => u.Phone == login);
+            }
+
+            return await _context.Users.SingleOrDefaultAsync(u => u.Email == login);
+        }
 
         [AllowAnonymous, HttpPost("otp/send")]
         public async Task<IActionResult> SendCodeAsync(SendOtpRequest model)
@@ -59,7 +74,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             var otp = GenerateOpt();
             var now = DateTime.UtcNow.ToUnixTime();
@@ -69,26 +84,29 @@ namespace Sisbi.Controllers
             {
                 if (loginType == LoginType.Phone)
                 {
-                    await SisbiContext.CreateAsync<User>(new
+                    user = new User
                     {
-                        phone = model.Login,
-                        otp,
-                        otp_date = now,
-                        otp_retry = 0,
-                        otp_type = model.Type
-                    });
+                        Phone = model.Login,
+                        Otp = otp,
+                        OtpDate = now,
+                        OtpRetry = 0,
+                        OtpType = model.Type
+                    };
                 }
                 else
                 {
-                    await SisbiContext.CreateAsync<User>(new
+                    user = new User
                     {
-                        email = model.Login,
-                        otp,
-                        otp_date = now,
-                        otp_retry = 0,
-                        otp_type = model.Type
-                    });
+                        Email = model.Login,
+                        Otp = otp,
+                        OtpDate = now,
+                        OtpRetry = 0,
+                        OtpType = model.Type
+                    };
                 }
+
+                await _context.Users.AddAsync(user);
+                await _context.SaveChangesAsync();
 
                 await SendOtp(otp, model.Login, loginType);
 
@@ -103,13 +121,10 @@ namespace Sisbi.Controllers
 
             if (user.OtpDate + waitingTime <= now)
             {
-                await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                {
-                    otp,
-                    otp_date = now,
-                    otp_retry = ++user.OtpRetry,
-                    otp_type = model.Type
-                });
+                user.Otp = otp;
+                user.OtpDate = now;
+                user.OtpRetry = ++user.OtpRetry;
+                user.OtpType = model.Type;
 
                 await SendOtp(otp, model.Login, loginType);
 
@@ -150,7 +165,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             if (user == null)
             {
@@ -174,24 +189,20 @@ namespace Sisbi.Controllers
             {
                 if (loginType == LoginType.Phone)
                 {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        phone_confirmed = true,
-                        otp = "NULL",
-                        otp_date = "NULL",
-                        otp_retry = "NULL"
-                    });
+                    user.PhoneConfirmed = true;
+                    user.Otp = null;
+                    user.OtpDate = null;
+                    user.OtpRetry = null;
                 }
                 else
                 {
-                    await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        email_confirmed = true,
-                        otp = "NULL",
-                        otp_date = "NULL",
-                        otp_retry = "NULL"
-                    });
+                    user.EmailConfirmed = true;
+                    user.Otp = null;
+                    user.OtpDate = null;
+                    user.OtpRetry = null;
                 }
+
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
@@ -238,7 +249,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             if (user == null)
             {
@@ -266,31 +277,37 @@ namespace Sisbi.Controllers
 
                 if (loginType == LoginType.Phone)
                 {
-                    user = await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        phone_confirmed = true,
-                        password = hash,
-                        salt,
-                        role = model.Role,
-                        registration_date = now
-                    }, returning: true);
+                    user.PhoneConfirmed = true;
+                    user.Password = hash;
+                    user.Salt = salt;
+                    user.Role = model.Role;
+                    user.RegistrationDate = now;
                 }
                 else
                 {
-                    user = await SisbiContext.UpdateUserAsync(model.Login, loginType, new
-                    {
-                        email_confirmed = true,
-                        password = hash,
-                        salt,
-                        role = model.Role,
-                        registration_date = now
-                    }, returning: true);
+                    user.EmailConfirmed = true;
+                    user.Password = hash;
+                    user.Salt = salt;
+                    user.Role = model.Role;
+                    user.RegistrationDate = now;
                 }
+
+                await _context.SaveChangesAsync();
+
+                var refreshToken = new RefreshToken
+                {
+                    Token = GenerateRefreshToken(),
+                    ExpireIn = DateTime.UtcNow.AddDays(30).ToUnixTime(),
+                    UserId = user.Id
+                };
+
+                await _context.RefreshTokens.AddAsync(refreshToken);
 
                 return Ok(new
                 {
                     success = true,
                     access_token = GenerateJwt(user.Id, model.Role),
+                    refresh_token = refreshToken.Token,
                     expires_in = now + 40
                 });
             }
@@ -325,7 +342,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             if (user == null || await Sha512Async(model.Password, user.Salt) != user.Password)
             {
@@ -336,10 +353,27 @@ namespace Sisbi.Controllers
                 });
             }
 
+            var refreshToken = new RefreshToken
+            {
+                Token = GenerateRefreshToken(),
+                ExpireIn = DateTime.UtcNow.AddDays(30).ToUnixTime(),
+                UserId = user.Id
+            };
+
+            var now = DateTime.UtcNow.ToUnixTime();
+            var expireTokens = _context.RefreshTokens.Where(rt => now > rt.ExpireIn);
+
+            _context.RemoveRange(expireTokens);
+
+            await _context.RefreshTokens.AddAsync(refreshToken);
+
+            await _context.SaveChangesAsync();
+
             return Ok(new
             {
                 success = true,
                 access_token = GenerateJwt(user.Id, user.Role),
+                refresh_token = refreshToken.Token,
                 expires_in = DateTime.UtcNow.ToUnixTime() + 40
             });
         }
@@ -385,7 +419,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             if (user == null || await Sha512Async(model.Password, user.Salt) != user.Password)
             {
@@ -399,11 +433,10 @@ namespace Sisbi.Controllers
             var salt = GenerateSalt();
             var newPassword = await Sha512Async(model.NewPassword, salt);
 
-            await SisbiContext.UpdateAsync<User>(user.Id, new
-            {
-                password = newPassword,
-                salt
-            });
+            user.Password = newPassword;
+            user.Salt = salt;
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -434,7 +467,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var user = await SisbiContext.GetUserAsync(model.Login, loginType);
+            var user = await GetUserAsync(model.Login, loginType);
 
             if (user == null)
             {
@@ -448,21 +481,148 @@ namespace Sisbi.Controllers
             var salt = GenerateSalt();
             var newPassword = await Sha512Async(model.Password, salt);
 
-            await SisbiContext.UpdateAsync<User>(user.Id, new
+            user.Password = newPassword;
+            user.Salt = salt;
+
+            var refreshToken = new RefreshToken
             {
-                password = newPassword,
-                salt
-            });
+                Token = GenerateRefreshToken(),
+                ExpireIn = DateTime.UtcNow.AddDays(30).ToUnixTime(),
+                UserId = user.Id
+            };
+
+            var now = DateTime.UtcNow.ToUnixTime();
+            var expireTokens = _context.RefreshTokens.Where(rt => now > rt.ExpireIn);
+
+            _context.RemoveRange(expireTokens);
+
+            await _context.RefreshTokens.AddAsync(refreshToken);
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 success = true,
                 access_token = GenerateJwt(user.Id, user.Role),
-                expires_in = DateTime.UtcNow.ToUnixTime() + 40
+                refresh_token = refreshToken.Token,
+                expires_in = now + 40
             });
         }
 
         #endregion
+
+        [NonAction]
+        private static string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+                return Convert.ToBase64String(randomNumber);
+            }
+        }
+
+        [NonAction]
+        private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+        {
+            var secretKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes("superSecretKey@345"));
+
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateAudience =
+                    false, //you might want to validate the audience and issuer depending on your use case
+                ValidateIssuer = false,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = secretKey,
+                ValidateLifetime = false //here we are saying that we don't care about the token's expiration date
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            ClaimsPrincipal result;
+            try
+            {
+                result = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+                var jwtSecurityToken = securityToken as JwtSecurityToken;
+
+                if (jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
+                    StringComparison.InvariantCultureIgnoreCase))
+                    return null;
+            }
+            catch
+            {
+                return null;
+            }
+
+
+            return result;
+        }
+
+        [AllowAnonymous, HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return BadRequest("неверный id");
+            }
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+        
+        [AllowAnonymous, HttpPost("refresh_token")]
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest body)
+        {
+            var principal = GetPrincipalFromExpiredToken(body.Token);
+
+            var userId = Guid.Empty;
+
+            if (principal == null ||
+                !principal.HasClaim(claim =>
+                    claim.Type == "id"
+                    && Guid.TryParse(claim.Value, out userId)))
+            {
+                return BadRequest();
+            }
+
+            if (userId != null)
+            {
+                var refreshToken =
+                    await _context.RefreshTokens.Where(r =>
+                        r.User.Id == userId && r.Token == body.RefreshToken).FirstOrDefaultAsync();
+
+                if (body.RefreshToken != null
+                    && refreshToken != null
+                    && refreshToken.Token == body.RefreshToken
+                    && refreshToken.ExpireIn < DateTime.UtcNow.ToUnixTime())
+                {
+                    var newRefreshToken = new RefreshToken
+                    {
+                        Token = GenerateRefreshToken(),
+                        ExpireIn = DateTime.UtcNow.AddDays(30).ToUnixTime(),
+                        UserId = refreshToken.UserId
+                    };
+
+                    await _context.RefreshTokens.AddAsync(newRefreshToken);
+
+                    _context.RefreshTokens.Remove(refreshToken);
+
+                    await _context.SaveChangesAsync();
+
+                    return Ok();
+                }
+            }
+
+
+            return BadRequest();
+        }
+
+        public class RefreshTokenRequest
+        {
+            [JsonProperty("token")] public string Token { get; set; }
+            [JsonProperty("refresh_token")] public string RefreshToken { get; set; }
+        }
 
         #region Other
 
