@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations.Schema;
+using Models.Enums;
 
 namespace Models.Entities
 {
@@ -14,5 +15,6 @@ namespace Models.Entities
         [Column("end_date")] public string EndDate { get; set; }
         [Column("resume_id")] public Guid ResumeId { get; set; }
         public virtual Resume Resume { get; set; }
+
     }
 }

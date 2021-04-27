@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
 using Models.Enums;
@@ -15,7 +17,7 @@ using Sisbi.Extensions;
 namespace Sisbi.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/v1/[controller]")]
     public class ProfileController : ControllerBase
     {
         private readonly SisbiContext _context;
@@ -56,7 +58,7 @@ namespace Sisbi.Controllers
             var provider = CultureInfo.InvariantCulture;
             var style = DateTimeStyles.None;
 
-            if (!DateTime.TryParseExact(body.BDate, format, provider, style, out var temp))
+            if (!string.IsNullOrEmpty(body.BDate) && !DateTime.TryParseExact(body.BDate, format, provider, style, out var temp))
             {
                 return BadRequest("Неверная дата");
             }
@@ -87,6 +89,30 @@ namespace Sisbi.Controllers
                 phone = user.Phone,
                 phone_confirmed = user.PhoneConfirmed,
                 registration_date = user.RegistrationDate
+            });
+        }
+        
+        [Authorize(Roles = "Worker"), HttpGet("resumes")]
+        public async Task<IActionResult> GetResumes()
+        {
+            var userId = User.Id();
+            var resumes = await _context.Resumes.Where(r => r.UserId == userId).ToListAsync();
+            return Ok(new
+            {
+                success = true,
+                data = resumes
+            });
+        }
+        
+        [Authorize(Roles = "Employer"), HttpGet("vacancies")]
+        public async Task<IActionResult> GetVacancies()
+        {
+            var userId = User.Id();
+            var vacancies = await _context.Vacancies.Where(r => r.UserId == userId).ToListAsync();
+            return Ok(new
+            {
+                success = true,
+                data = vacancies
             });
         }
 

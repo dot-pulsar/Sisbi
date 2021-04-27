@@ -12,7 +12,7 @@ using Sisbi.Extensions;
 
 namespace Sisbi.Controllers
 {
-    [Route("[controller]")]
+    [Route("api/v1/[controller]")]
     [ApiController]
     public class VacanciesController : ControllerBase
     {
@@ -26,55 +26,38 @@ namespace Sisbi.Controllers
         [AllowAnonymous, HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] GetAllQuery query)
         {
-            object result;
-            if (query.UserId == Guid.Empty)
+            var userId = Guid.Empty;
+            if (User.Identity != null && User.Identity.IsAuthenticated)
             {
-                result = await _context.Vacancies
-                    .Skip(query.Offset)
-                    .Take(query.Count)
-                    .Select(r => new
-                    {
-                        id = r.Id,
-                        position = r.Position,
-                        salary = r.Salary,
-                        city = new
-                        {
-                            id = r.City.Id,
-                            name = r.City.Name
-                        },
-                        schedule = r.Schedule,
-                        description = r.Description,
-                        user_id = r.UserId
-                    })
-                    .ToListAsync();
+                userId = User.Id();
+                Console.WriteLine(userId);
             }
-            else
-            {
-                result = await _context.Vacancies
-                    .Where(r => r.UserId == query.UserId)
-                    .Skip(query.Offset)
-                    .Take(query.Count)
-                    .Select(r => new
+            var result = await _context.Vacancies
+                .Skip(query.Offset)
+                .Take(query.Count)
+                .Where(r => query.UserId == Guid.Empty ? r.UserId != Guid.Empty : r.UserId == query.UserId)
+                .Where(r => query.All ? r.UserId != Guid.Empty : r.UserId != userId)
+                .Select(r => new
+                {
+                    id = r.Id,
+                    position = r.Position,
+                    salary = r.Salary,
+                    city = new
                     {
-                        id = r.Id,
-                        position = r.Position,
-                        salary = r.Salary,
-                        city = new
-                        {
-                            id = r.City.Id,
-                            name = r.City.Name
-                        },
-                        schedule = r.Schedule,
-                        description = r.Description,
-                        user_id = r.UserId
-                    })
-                    .ToListAsync();
-            }
+                        id = r.City.Id,
+                        name = r.City.Name
+                    },
+                    schedule = r.Schedule,
+                    description = r.Description,
+                    user_id = r.UserId
+                })
+                .ToListAsync();
+
 
             return Ok(new
             {
                 success = true,
-                vacancies = result
+                data = result
             });
         }
 
@@ -130,7 +113,8 @@ namespace Sisbi.Controllers
                 Description = body.Description,
                 Phone = body.Phone,
                 Email = body.Email,
-                UserId = userId
+                UserId = userId,
+                Status = AdStatus.Created.ToString()
             };
 
             await _context.Vacancies.AddAsync(vacancy);
@@ -153,6 +137,7 @@ namespace Sisbi.Controllers
                 description = vacancy.Description,
                 phone = vacancy.Phone,
                 email = vacancy.Email,
+                status = vacancy.Status,
                 user_id = vacancy.UserId
             });
         }
@@ -242,7 +227,8 @@ namespace Sisbi.Controllers
         {
             [FromQuery(Name = "user_id")] public Guid UserId { get; set; }
             [FromQuery(Name = "offset")] public int Offset { get; set; } = 0;
-            [FromQuery(Name = "count")] public int Count { get; set; } = 100;
+            [FromQuery(Name = "count")] public int Count { get; set; } = 20;
+            [FromQuery(Name = "all")] public bool All { get; set; } = true;
         }
     }
 }

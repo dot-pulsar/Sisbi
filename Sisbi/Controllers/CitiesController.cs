@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +9,7 @@ using Models.Entities;
 
 namespace Sisbi.Controllers
 {
-    [Route("[controller]")]
+    [Route("api/v1/[controller]")]
     [ApiController]
     public class CitiesController : ControllerBase
     {
@@ -22,14 +21,47 @@ namespace Sisbi.Controllers
         }
 
         [AllowAnonymous, HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(string query = null)
         {
-            var cities = await _context.Cities.ToListAsync();
+            var words = query?.ToLower().Split(' ', '-').ToList();
+            
+            if (words != null)
+            {
+                query = string.Empty;
+
+                foreach (var word in words)
+                {
+                    var isPrevWord = false;
+                    foreach (var chr in word)
+                    {
+                        if (char.IsLetter(chr))
+                        {
+                            isPrevWord = true;
+                            query += chr;
+                        }
+                    }
+
+                    if (isPrevWord)
+                    {
+                        query += "-";
+                    }
+                }
+
+                query = query.Trim('-');
+            }
+
+            Console.WriteLine($"'{query}'");
+
+            var cities = await _context.Cities
+                .Where(c => EF.Functions
+                    .Like(c.Name
+                        .ToLower(), $"%{query}%")).ToListAsync();
 
             return Ok(new
             {
                 success = true,
-                cities
+
+                data = cities
             });
         }
 

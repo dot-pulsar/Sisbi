@@ -25,7 +25,7 @@ using Sisbi.Services.Contracts;
 namespace Sisbi.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/v1/[controller]")]
     public class AccountController : ControllerBase
     {
         private readonly IEmailService _emailService;

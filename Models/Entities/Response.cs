@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Mvc.ViewFeatures.Buffers;
 
 namespace Models.Entities
 {
@@ -9,6 +10,9 @@ namespace Models.Entities
         [Column("id")] public Guid Id { get; set; }
         [Column("resume_id")] public Guid ResumeId { get; set; }
         [Column("vacancy_id")] public Guid VacancyId { get; set; }
-        [Column("sender")] public string Sender { get; set; }
+        [Column("sender")] public Sender Sender { get; set; }
+        
+        public virtual Resume Resume { get; set; }
+        public virtual Vacancy Vacancy { get; set; }
     }
 }
