@@ -74,7 +74,7 @@ namespace Sisbi.Controllers
                             description = fr.Resume.Description,
                             places_of_work = fr
                                 .Resume
-                                .PlaceOfWorks
+                                .PlacesOfWork
                                 .Select(pow => new
                                 {
                                     id = pow.Id,

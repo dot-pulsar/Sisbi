@@ -48,7 +48,7 @@ namespace Sisbi.Controllers
                         schedule = r.Resume.Schedule,
                         description = r.Resume.Description,
                         user_id = r.Resume.UserId,
-                        places_of_work = r.Resume.PlaceOfWorks.Select(pow => new
+                        places_of_work = r.Resume.PlacesOfWork.Select(pow => new
                         {
                             id = pow.Id,
                             position = pow.Position,
@@ -125,7 +125,7 @@ namespace Sisbi.Controllers
                     schedule = response.Resume.Schedule,
                     description = response.Resume.Description,
                     user_id = response.Resume.UserId,
-                    places_of_work = response.Resume.PlaceOfWorks.Select(pow => new
+                    places_of_work = response.Resume.PlacesOfWork.Select(pow => new
                     {
                         id = pow.Id,
                         position = pow.Position,
@@ -240,7 +240,7 @@ namespace Sisbi.Controllers
                     schedule = response.Resume.Schedule,
                     description = response.Resume.Description,
                     user_id = response.Resume.UserId,
-                    places_of_work = response.Resume.PlaceOfWorks.Select(pow => new
+                    places_of_work = response.Resume.PlacesOfWork.Select(pow => new
                     {
                         id = pow.Id,
                         position = pow.Position,

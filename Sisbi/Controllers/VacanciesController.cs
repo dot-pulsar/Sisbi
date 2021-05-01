@@ -1,8 +1,10 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Models;
@@ -17,10 +19,12 @@ namespace Sisbi.Controllers
     public class VacanciesController : ControllerBase
     {
         private readonly SisbiContext _context;
+        private readonly IWebHostEnvironment _hostingEnvironment;
 
-        public VacanciesController(SisbiContext context)
+        public VacanciesController(IWebHostEnvironment hostingEnvironment, SisbiContext context)
         {
             _context = context;
+            _hostingEnvironment = hostingEnvironment;
         }
 
         [AllowAnonymous, HttpGet]
@@ -32,6 +36,7 @@ namespace Sisbi.Controllers
                 userId = User.Id();
                 Console.WriteLine(userId);
             }
+
             var result = await _context.Vacancies
                 .Skip(query.Offset)
                 .Take(query.Count)
@@ -52,7 +57,6 @@ namespace Sisbi.Controllers
                     user_id = r.UserId
                 })
                 .ToListAsync();
-
 
             return Ok(new
             {
@@ -88,7 +92,7 @@ namespace Sisbi.Controllers
             });
         }
 
-        [Authorize(Roles = "Worker"), HttpPost]
+        [Authorize(Roles = "Employer"), HttpPost]
         public async Task<IActionResult> Create([FromBody] VacancyRequest body)
         {
             //TODO: добавить проверку полей в body
@@ -142,7 +146,7 @@ namespace Sisbi.Controllers
             });
         }
 
-        [Authorize(Roles = "Worker"), HttpPut("{id}")]
+        [Authorize(Roles = "Employer"), HttpPut("{id}")]
         public async Task<IActionResult> Edit([FromRoute] Guid id, [FromBody] VacancyRequest body)
         {
             //TODO: добавить проверку полей в body
@@ -188,7 +192,7 @@ namespace Sisbi.Controllers
             });
         }
 
-        [Authorize(Roles = "Worker"), HttpDelete("{id}")]
+        [Authorize(Roles = "Employer"), HttpDelete("{id}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)
         {
             var vacancy = await _context.Vacancies.FindAsync(id);
@@ -204,6 +208,57 @@ namespace Sisbi.Controllers
             }
 
             _context.Vacancies.Remove(vacancy);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true
+            });
+        }
+
+        [Authorize(Roles = "Employer"), HttpPost("{vacancyId}/video")]
+        public async Task<IActionResult> UploadVideo([FromRoute] Guid vacancyId, [FromForm] FormVideo data)
+        {
+            var userId = User.Id();
+
+            var vacancy = await _context.Vacancies.SingleOrDefaultAsync(v => v.Id == vacancyId);
+
+            if (vacancy == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Vacancy not found."
+                });
+            }
+
+            /*if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }*/
+
+            const string videosDir = "videos";
+            var videos = Path.Combine(_hostingEnvironment.WebRootPath, videosDir);
+
+            var newGuid = Guid.NewGuid();
+            var videoName = $"{newGuid}.{data.Format}";
+            var videoPath = Path.Combine(videos, videoName);
+
+            if (!string.IsNullOrEmpty(vacancy.Video))
+            {
+                var oldVideoName = vacancy.Video.Split("/").Last();
+                Console.WriteLine(oldVideoName);
+                System.IO.File.Delete(Path.Combine(videos, oldVideoName));
+            }
+
+            await using Stream fileStream = new FileStream(videoPath, FileMode.Create);
+            await data.Video.CopyToAsync(fileStream);
+
+            vacancy.Video = $"{Request.Scheme}://{Request.Host}/{videosDir}/{videoName}";
             await _context.SaveChangesAsync();
 
             return Ok(new

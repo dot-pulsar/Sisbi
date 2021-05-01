@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.Json.Serialization;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Models;
@@ -15,8 +15,6 @@ using Models.Entities;
 using Models.Enums;
 using Models.Requests;
 using Sisbi.Extensions;
-using Twilio.Rest.Chat.V1.Service;
-using Twilio.Rest.Trusthub.V1;
 
 namespace Sisbi.Controllers
 {
@@ -33,13 +31,10 @@ namespace Sisbi.Controllers
             _hostingEnvironment = hostEnvironment;
         }
 
-        private WorkExperiences getWorkExperiences(ICollection<PlaceOfWork> placesOfWork)
-        {
-            return WorkExperiences.Default;
-        }
+        #region Resumes
 
         [AllowAnonymous, HttpGet]
-        public async Task<IActionResult> GetAllResumes([FromQuery] GetAllQuery query)
+        public async Task<IActionResult> GetAllResumes([FromQuery] GetAllQueryResume query)
         {
             var userId = Guid.Empty;
             if (User.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Worker"))
@@ -48,6 +43,82 @@ namespace Sisbi.Controllers
             }
 
             IQueryable<Resume> resumes = _context.Resumes;
+
+            /*if (!string.IsNullOrEmpty(query.Position))
+            {
+                var words = query.Position.Split(" ");
+
+                var sql = new StringBuilder("SELECT * FROM resume WHERE ");
+
+                foreach (var word in words)
+                {
+                    if (!string.IsNullOrEmpty(word))
+                    {
+                        sql.Append($"position ILIKE '%{word}%' ");
+
+                        if (word != words.Last())
+                        {
+                            sql.Append("OR ");
+                        }
+                    }
+                }
+
+                sql.Append("OR ");
+
+                foreach (var word in words)
+                {
+                    if (!string.IsNullOrEmpty(word))
+                    {
+                        sql.Append($"description ILIKE '%{word}%' ");
+
+                        if (word != words.Last())
+                        {
+                            sql.Append("OR ");
+                        }
+                    }
+                }
+
+                sql.Append("ORDER BY ");
+
+                foreach (var word in words)
+                {
+                    if (!string.IsNullOrEmpty(word))
+                    {
+                        sql.Append($"CASE WHEN position ILIKE '%{word}%' THEN 2 ELSE 0 END ");
+
+
+                        sql.Append("+ ");
+                    }
+                }
+
+                foreach (var word in words)
+                {
+                    if (!string.IsNullOrEmpty(word))
+                    {
+                        sql.Append($"CASE WHEN description ILIKE '%{word}%' THEN 1 ELSE 0 END ");
+
+                        if (word != words.Last())
+                        {
+                            sql.Append("+ ");
+                        }
+                    }
+                }
+
+                sql.Append("DESC");
+
+                var all = _context.Resumes.FromSqlRaw(sql.ToString());
+
+                Console.WriteLine(sql.ToString());
+                Console.WriteLine(all.Count());
+
+                resumes = all;
+
+                //resumes = _context.Resumes.Where(r => words.Any(w=>r.Position.Contains(w)));
+            }
+            else
+            {
+                resumes = _context.Resumes;
+            }*/
 
             if (!query.All)
             {
@@ -63,63 +134,37 @@ namespace Sisbi.Controllers
                 resumes = resumes.Where(r => r.UserId != userId);
             }
 
-            if (!string.IsNullOrEmpty(query.Cities))
+            if (query.Cities != null && query.Cities.Any())
             {
-                var cities = new List<Guid>();
-
-                var guidCities = query.Cities.Split(',');
-                foreach (var uuidCity in guidCities)
-                {
-                    if (Guid.TryParse(uuidCity, out var guid))
-                    {
-                        cities.Add(guid);
-                    }
-                    else
-                    {
-                        return BadRequest(new
-                        {
-                            success = false,
-                            description = $"UUID ({uuidCity}) не валиден!"
-                        });
-                    }
-                }
-
-                resumes = resumes.Where(r => cities.Contains(r.CityId));
+                resumes = resumes.Where(r => query.Cities.Contains(r.CityId));
             }
 
-
-            /*var tempStartTime = ParseDateTime(placeOfWork.StartDate);
-
-            if (tempStartTime < startTime)
+            if (query.MinWorkExperience != 0)
             {
-                startTime = tempStartTime;
+                if (query.MinWorkExperience < 0)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = $"min_work_exp не может быть меньше 0!"
+                    });
+                }
+
+                resumes = resumes.Where(r => r.WorkExperience >= query.MinWorkExperience);
             }
 
-            var tempEndTime = ParseDateTime(placeOfWork.EndDate);
-            if (tempEndTime != null)
+            if (query.MaxWorkExperience != 0)
             {
-                    
-            }*/
-            
-            if (query.WorkExperience != WorkExperiences.Default)
-            {
-                if (query.WorkExperience == WorkExperiences.NotExperience)
+                if (query.MaxSalary < 0)
                 {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = $"max_work_exp не может быть меньше 0!"
+                    });
                 }
-                else if (query.WorkExperience == WorkExperiences.FromOneToThreeYears)
-                {
-                    var resume = await resumes.Where(r =>
-                        getWorkExperiences(r.PlaceOfWorks) == WorkExperiences.FromOneToThreeYears).ToListAsync();
-                }
-                else if (query.WorkExperience == WorkExperiences.FromThreeToSixYears)
-                {
-                    var resume = resumes.Where(r =>
-                        getWorkExperiences(r.PlaceOfWorks.ToList()) == WorkExperiences.FromThreeToSixYears).ToList();
-                }
-                else if (query.WorkExperience == WorkExperiences.OverSixYears)
-                {
-                    var resume = resumes.Where(r => getWorkExperiences(r.PlaceOfWorks.ToList()) == WorkExperiences.OverSixYears).ToList();
-                }
+
+                resumes = resumes.Where(r => r.WorkExperience <= query.MaxWorkExperience);
             }
 
             if (query.MinSalary != 0)
@@ -150,44 +195,120 @@ namespace Sisbi.Controllers
                 resumes = resumes.Where(r => r.Salary <= query.MaxSalary);
             }
 
-            /*var result = await _context.Resumes
-                .Where(r => query.UserId == Guid.Empty ? r.UserId != Guid.Empty : r.UserId == query.UserId)
-                .Where(r => query.All ? r.UserId != Guid.Empty : r.UserId != userId)
-                .Where(r => query.MinSalary == 0 ? r.Salary >= 0 : r.Salary >= query.MinSalary)
-                .Where(r => query.MaxSalary == 0 ? r.Salary >= 0 : r.Salary <= query.MaxSalary)
-                .Skip(query.Offset)
-                .Take(query.Count)
-                .Select(r => new
-                {
-                    id = r.Id,
-                    position = r.Position,
-                    salary = r.Salary,
-                    city = new
+            switch (query.Limit)
+            {
+                case > 100:
+                    return BadRequest(new
                     {
-                        id = r.City.Id,
-                        name = r.City.Name
-                    },
-                    schedule = r.Schedule,
-                    description = r.Description,
-                    status = r.Status,
-                    video = r.Video,
-                    user_id = r.UserId,
-                    places_of_work = r.PlaceOfWorks.Select(pow => new
+                        success = false,
+                        description = $"Limit не может быть больше 100!"
+                    });
+                case < 0:
+                    return BadRequest(new
                     {
-                        id = pow.Id,
-                        position = pow.Position,
-                        company = pow.Company,
-                        description = pow.Description,
-                        start_date = pow.StartDate,
-                        end_date = pow.EndDate,
-                        resume_id = pow.ResumeId
-                    })
-                }).ToListAsync();*/
+                        success = false,
+                        description = $"Limit не может быть меньше 0!"
+                    });
+                case 0:
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "Limit не может быть равен 0!"
+                    });
+            }
+
+            switch (query.Page)
+            {
+                case < 0:
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = $"Page не может быть меньше 0!"
+                    });
+                case 0:
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "Page не может быть равен 0!"
+                    });
+            }
+
+            var total = await resumes.CountAsync();
+
+            resumes = resumes.Skip(query.Page * query.Limit - query.Limit).Take(query.Limit);
+
+            var perPage = await resumes.CountAsync();
+            var currentPage = query.Page; //Math.Ceiling((double) (total - (total - query.Page)) / perPage);
+            var lastPage = Math.Ceiling((double) total / query.Limit);
+
+            switch (query.SortBy)
+            {
+                case AdSortBy.DateAsc:
+                    resumes = resumes.OrderBy(r => r.DateOfChange);
+                    break;
+                case AdSortBy.DateDesc:
+                    resumes = resumes.OrderByDescending(r => r.DateOfChange);
+                    break;
+                case AdSortBy.SalaryAsc:
+                    resumes = resumes.OrderBy(r => r.Salary);
+                    break;
+                case AdSortBy.SalaryDesc:
+                    resumes = resumes.OrderByDescending(r => r.Salary);
+                    break;
+                default:
+                    if (!string.IsNullOrEmpty(query.SortBy))
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            description = $"Нет такой сортрировки ({query.SortBy})"
+                        });
+                    }
+
+                    resumes = resumes.OrderByDescending(r => r.DateOfChange);
+                    break;
+            }
 
             return Ok(new
             {
                 success = true,
-                data = await resumes.ToListAsync()
+                total = total,
+                per_page = perPage,
+                current_page = currentPage,
+                last_page = lastPage,
+                data = await resumes
+                    .Select(r => new
+                    {
+                        id = r.Id,
+                        position = r.Position,
+                        salary = r.Salary,
+                        city = new
+                        {
+                            id = r.City.Id,
+                            name = r.City.Name
+                        },
+                        schedule = r.Schedule,
+                        description = r.Description,
+                        status = r.Status,
+                        video = r.Video,
+                        work_experience = r.WorkExperience,
+                        places_of_work = r.PlacesOfWork
+                            .Select(pow => new
+                            {
+                                id = pow.Id,
+                                position = pow.Position,
+                                company = pow.Company,
+                                description = pow.Description,
+                                start_date = pow.StartDate,
+                                end_date = pow.EndDate,
+                                resume_id = pow.ResumeId
+                            })
+                            .ToList(),
+                        date_of_creation = r.DateOfCreation,
+                        date_of_change = r.DateOfChange,
+                        user_id = r.UserId
+                    })
+                    .ToListAsync()
             });
         }
 
@@ -216,22 +337,27 @@ namespace Sisbi.Controllers
                 description = resume.Description,
                 status = resume.Status,
                 video = resume.Video,
-                user_id = resume.UserId,
-                places_of_work = resume.PlaceOfWorks.Select(pow => new
-                {
-                    id = pow.Id,
-                    position = pow.Position,
-                    company = pow.Company,
-                    description = pow.Description,
-                    start_date = pow.StartDate,
-                    end_date = pow.EndDate,
-                    resume_id = pow.ResumeId
-                })
+                work_experience = resume.WorkExperience,
+                places_of_work = resume.PlacesOfWork
+                    .Select(pow => new
+                    {
+                        id = pow.Id,
+                        position = pow.Position,
+                        company = pow.Company,
+                        description = pow.Description,
+                        start_date = pow.StartDate,
+                        end_date = pow.EndDate,
+                        resume_id = pow.ResumeId
+                    })
+                    .OrderBy(pow => ParseDateTime(pow.start_date)),
+                date_of_creation = resume.DateOfCreation,
+                date_of_change = resume.DateOfChange,
+                user_id = resume.UserId
             });
         }
 
         [Authorize(Roles = "Worker"), HttpPost]
-        public async Task<IActionResult> CreateResume([FromBody] CreateBody body)
+        public async Task<IActionResult> CreateResume([FromBody] CreateBodyResume body)
         {
             //TODO: добавить проверку полей в body
 
@@ -256,6 +382,8 @@ namespace Sisbi.Controllers
                 Phone = body.Phone,
                 Email = body.Email,
                 UserId = userId,
+                DateOfCreation = DateTime.UtcNow.ToUnixTime(),
+                DateOfChange = DateTime.UtcNow.ToUnixTime(),
                 Status = AdStatus.Created.ToString()
             };
 
@@ -281,12 +409,16 @@ namespace Sisbi.Controllers
                 email = resume.Email,
                 status = resume.Status,
                 video = resume.Video,
+                work_experience = resume.WorkExperience,
+                places_of_work = resume.PlacesOfWork,
+                date_of_creation = resume.DateOfCreation,
+                date_of_change = resume.DateOfChange,
                 user_id = resume.UserId
             });
         }
 
         [Authorize(Roles = "Worker"), HttpPut("{id}")]
-        public async Task<IActionResult> EditResume([FromRoute] Guid id, [FromBody] EditBody body)
+        public async Task<IActionResult> EditResume([FromRoute] Guid id, [FromBody] EditBodyResume body)
         {
             //TODO: добавить проверку полей в body
 
@@ -309,6 +441,7 @@ namespace Sisbi.Controllers
             resume.Description = body.Description;
             resume.Phone = body.Phone;
             resume.Email = body.Email;
+            resume.DateOfChange = DateTime.UtcNow.ToUnixTime();
 
             await _context.SaveChangesAsync();
 
@@ -329,7 +462,8 @@ namespace Sisbi.Controllers
                 email = resume.Email,
                 status = resume.Status,
                 video = resume.Video,
-                places_of_work = resume.PlaceOfWorks.Select(pow => new
+                work_experience = resume.WorkExperience,
+                places_of_work = resume.PlacesOfWork.Select(pow => new
                 {
                     id = pow.Id,
                     position = pow.Position,
@@ -339,6 +473,8 @@ namespace Sisbi.Controllers
                     end_date = pow.EndDate,
                     resume_id = pow.ResumeId
                 }),
+                date_of_creation = resume.DateOfCreation,
+                date_of_change = resume.DateOfChange,
                 user_id = resume.UserId
             });
         }
@@ -367,6 +503,10 @@ namespace Sisbi.Controllers
             });
         }
 
+        #endregion
+
+        #region PlacesOfWork
+
         [Authorize(Roles = "Worker"), HttpGet("{resumeId}/places_of_work")]
         public async Task<IActionResult> GetAll([FromRoute] Guid resumeId)
         {
@@ -375,21 +515,20 @@ namespace Sisbi.Controllers
                 .ToListAsync();
 
             var powResult = pows.Select(place => new
-                {
-                    id = place.Id,
-                    position = place.Position,
-                    company = place.Company,
-                    description = place.Description,
-                    start_date = place.StartDate,
-                    end_date = place.EndDate,
-                    resume_id = place.ResumeId
-                })
-                .ToList();
+            {
+                id = place.Id,
+                position = place.Position,
+                company = place.Company,
+                description = place.Description,
+                start_date = place.StartDate,
+                end_date = place.EndDate,
+                resume_id = place.ResumeId
+            }).OrderBy(pow => ParseDateTime(pow.start_date));
 
             return Ok(new
             {
                 success = true,
-                places_of_work = powResult
+                data = powResult
             });
         }
 
@@ -470,15 +609,6 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (resumeId == Guid.Empty)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "resume_id field is required."
-                });
-            }
-
             if (!IsDateValid(body.StartDate))
             {
                 return BadRequest(new
@@ -497,7 +627,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (ParseDateTime(body.StartDate) >= ParseDateTime(body.EndDate) && body.EndDate != "now")
+            if (ParseDateTime(body.StartDate) > ParseDateTime(body.EndDate) && body.EndDate != "now")
             {
                 return BadRequest(new
                 {
@@ -512,6 +642,15 @@ namespace Sisbi.Controllers
                 {
                     success = false,
                     description = "end_date should not be more than today's month."
+                });
+            }
+
+            if (resumeId == Guid.Empty)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "resume_id field is required."
                 });
             }
 
@@ -536,29 +675,33 @@ namespace Sisbi.Controllers
 
             #endregion
 
-            var pow = new PlaceOfWork
+            var newPlaceOfWork = new PlaceOfWork
             {
                 Position = body.Position,
                 Company = body.Company,
                 Description = body.Description,
                 StartDate = body.StartDate,
                 EndDate = body.EndDate,
-                ResumeId = resumeId
+                ResumeId = resumeId,
             };
 
-            await _context.PlacesOfWork.AddAsync(pow);
+            resume.PlacesOfWork.Add(newPlaceOfWork);
+
+            resume.WorkExperience = GetWorkExperience(resume.PlacesOfWork);
+            resume.DateOfChange = DateTime.UtcNow.ToUnixTime();
+
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 success = true,
-                id = pow.Id,
-                position = pow.Position,
-                company = pow.Company,
-                description = pow.Description,
-                start_date = pow.StartDate,
-                end_date = pow.EndDate,
-                resume_id = pow.ResumeId
+                id = newPlaceOfWork.Id,
+                position = newPlaceOfWork.Position,
+                company = newPlaceOfWork.Company,
+                description = newPlaceOfWork.Description,
+                start_date = newPlaceOfWork.StartDate,
+                end_date = newPlaceOfWork.EndDate,
+                resume_id = newPlaceOfWork.ResumeId
             });
         }
 
@@ -613,15 +756,6 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (resumeId == Guid.Empty)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "resume_id field is required."
-                });
-            }
-
             if (!IsDateValid(body.StartDate))
             {
                 return BadRequest(new
@@ -640,7 +774,7 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (ParseDateTime(body.StartDate) >= ParseDateTime(body.EndDate))
+            if (ParseDateTime(body.StartDate) > ParseDateTime(body.EndDate) && body.EndDate != "now")
             {
                 return BadRequest(new
                 {
@@ -655,6 +789,15 @@ namespace Sisbi.Controllers
                 {
                     success = false,
                     description = "end_date should not be more than today's month."
+                });
+            }
+
+            if (resumeId == Guid.Empty)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "resume_id field is required."
                 });
             }
 
@@ -697,6 +840,9 @@ namespace Sisbi.Controllers
             pow.EndDate = body.EndDate;
             pow.ResumeId = resumeId;
 
+            resume.WorkExperience = GetWorkExperience(resume.PlacesOfWork);
+            resume.DateOfChange = DateTime.UtcNow.ToUnixTime();
+
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -715,29 +861,51 @@ namespace Sisbi.Controllers
         [Authorize(Roles = "Worker"), HttpDelete("{resumeId}/places_of_work/{id}")]
         public async Task<IActionResult> Delete([FromRoute] Guid resumeId, [FromRoute] Guid id)
         {
-            var userId = User.Id();
+            if (resumeId == Guid.Empty)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "resume_id field is required."
+                });
+            }
 
-            var pow = await _context.PlacesOfWork.SingleOrDefaultAsync(p => p.Id == id && p.ResumeId == resumeId);
+            var pow = await _context.PlacesOfWork.FindAsync(id);
 
             if (pow == null)
             {
                 return BadRequest(new
                 {
                     success = false,
-                    description = "Place not found."
+                    description = "place_of_work not found."
                 });
             }
 
-            if (pow.Resume.UserId != userId)
+            var resume = await _context.Resumes.FindAsync(resumeId);
+            if (resume == null)
             {
                 return BadRequest(new
                 {
                     success = false,
-                    description = "you are not authorized to use this place_of_work_id"
+                    description = "resume_id not found."
                 });
             }
 
-            _context.PlacesOfWork.Remove(pow);
+            if (resume.UserId != User.Id())
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }
+
+            resume.PlacesOfWork.Remove(pow);
+
+            resume.WorkExperience = GetWorkExperience(resume.PlacesOfWork);
+            resume.DateOfChange = DateTime.UtcNow.ToUnixTime();
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -745,15 +913,12 @@ namespace Sisbi.Controllers
             });
         }
 
+        #endregion
 
-        public class Data
-        {
-            [FromForm(Name = "video")] public IFormFile Video { get; set; }
-            [FromForm(Name = "format")] public string Format { get; set; }
-        }
+        #region Video
 
         [Authorize(Roles = "Worker"), HttpPost("{resumeId}/video")]
-        public async Task<IActionResult> UploadVideo([FromRoute] Guid resumeId, [FromForm] Data data)
+        public async Task<IActionResult> UploadVideo([FromRoute] Guid resumeId, [FromForm] FormVideo data)
         {
             var userId = User.Id();
 
@@ -803,10 +968,12 @@ namespace Sisbi.Controllers
             });
         }
 
+        #endregion
+
         [NonAction]
         private static bool IsDateValid(string date)
         {
-            var format = "MM-yyyy";
+            const string format = "MM-yyyy";
             var provider = CultureInfo.InvariantCulture;
             var style = DateTimeStyles.None;
 
@@ -816,49 +983,33 @@ namespace Sisbi.Controllers
         [NonAction]
         private static DateTime ParseDateTime(string date)
         {
-            var format = "MM-yyyy";
+            const string format = "MM-yyyy";
             var provider = CultureInfo.InvariantCulture;
             var style = DateTimeStyles.None;
+            if (date == "now" || date == "Now")
+            {
+                return DateTime.Today;
+            }
+
             DateTime.TryParseExact(date, format, provider, style, out var result);
 
             return result;
         }
 
-        public class CreateBody
+        [NonAction]
+        private static int GetWorkExperience(IEnumerable<PlaceOfWork> placesOfWork)
         {
-            [JsonPropertyName("position")] public string Position { get; set; }
-            [JsonPropertyName("salary")] public long Salary { get; set; }
-            [JsonPropertyName("city_id")] public Guid CityId { get; set; }
-            [JsonPropertyName("schedule")] public string Schedule { get; set; }
-            [JsonPropertyName("description")] public string Description { get; set; }
-            [JsonPropertyName("email")] public string Email { get; set; }
-            [JsonPropertyName("phone")] public string Phone { get; set; }
-        }
+            var workExperience = TimeSpan.Zero;
+            foreach (var pow in placesOfWork)
+            {
+                var ts = ParseDateTime(pow.EndDate) - ParseDateTime(pow.StartDate);
+                Console.WriteLine(
+                    $"Start: {pow.StartDate}, End: {pow.EndDate}, TS: {ts}, Days: {ts.Days}, Years: {ts.Days / 365}");
+                workExperience += ParseDateTime(pow.EndDate) - ParseDateTime(pow.StartDate);
+            }
 
-        public class EditBody
-        {
-            [JsonPropertyName("position")] public string Position { get; set; }
-            [JsonPropertyName("salary")] public long Salary { get; set; }
-            [JsonPropertyName("city_id")] public Guid CityId { get; set; }
-            [JsonPropertyName("schedule")] public string Schedule { get; set; }
-            [JsonPropertyName("description")] public string Description { get; set; }
-            [JsonPropertyName("email")] public string Email { get; set; }
-            [JsonPropertyName("phone")] public string Phone { get; set; }
-        }
-
-        public class GetAllQuery
-        {
-            [FromQuery(Name = "user_id")] public Guid UserId { get; set; }
-            [FromQuery(Name = "offset")] public int Offset { get; set; } = 0;
-            [FromQuery(Name = "count")] public int Count { get; set; } = 20;
-            [FromQuery(Name = "all")] public bool All { get; set; } = true;
-            [FromQuery(Name = "cities")] public string Cities { get; set; }
-            [FromQuery(Name = "work_experience")] public WorkExperiences WorkExperience { get; set; }
-            [FromQuery(Name = "min_salary")] public long MinSalary { get; set; }
-            [FromQuery(Name = "max_salary")] public long MaxSalary { get; set; }
-            [FromQuery(Name = "schedule")] public string Schedule { get; set; }
-            [FromQuery(Name = "employment_type")] public string EmploymentType { get; set; }
-            [FromQuery(Name = "sort_by")] public string SortBy { get; set; }
+            Console.WriteLine($"TOTAL: {workExperience.Days / 365}");
+            return workExperience.Days / 365;
         }
     }
 }

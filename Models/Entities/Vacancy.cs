@@ -20,6 +20,7 @@ namespace Models.Entities
         [Column("video")] public string Video { get; set; }
         [Column("status")] public string Status { get; set; }
         [Column("user_id")] public Guid UserId { get; set; }
+        [Column("work_experience")] public long WorkExperience { get; set; }
 
         public virtual City City { get; set; }
     }

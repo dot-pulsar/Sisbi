@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.StaticFiles.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -76,7 +77,7 @@ namespace Sisbi
                     //o.JsonSerializerOptions.IgnoreNullValues = true;
                     o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
-
+            
             services.AddSwaggerGen(c => { c.SwaggerDoc("v1", new OpenApiInfo {Title = "Sisbi", Version = "v1"}); });
 
             services.Configure<TwilioSettings>(Configuration.GetSection("TwilioSettings"));
