@@ -1049,6 +1049,43 @@ namespace Sisbi.Controllers
 
         #region Video
 
+        [Authorize(Roles = "Worker"), HttpGet("{resumeId}/videos")]
+        public async Task<IActionResult> GetVideo([FromRoute] Guid resumeId)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.FindAsync(resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found."
+                });
+            }
+
+            /*if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }*/
+
+            return Ok(new
+            {
+                success = true,
+                data = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    urn = v.Urn
+                })
+            });
+        }
+
         [Authorize(Roles = "Worker"), HttpPost("{resumeId}/videos")]
         public async Task<IActionResult> UploadVideo([FromRoute] Guid resumeId, [FromForm] FormVideo data)
         {
@@ -1132,7 +1169,7 @@ namespace Sisbi.Controllers
                     Format = newPosterFormat,
                     Type = "system",
                     Number = ++number,
-                    Selected = number == 1 && resume.Posters.All(p=>p.Type == "system")
+                    Selected = number == 1 && resume.Posters.All(p => p.Type == "system")
                 });
             }
 
@@ -1165,10 +1202,50 @@ namespace Sisbi.Controllers
                 })
             });
         }
-
+        
         #endregion
 
         #region Poster
+
+        [Authorize(Roles = "Worker"), HttpGet("{resumeId}/posters")]
+        public async Task<IActionResult> GetPosters([FromRoute] Guid resumeId)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.FindAsync(resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found."
+                });
+            }
+
+            /*if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }*/
+
+            return Ok(new
+            {
+                success = true,
+                data = resume.Posters.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    type = v.Type,
+                    selected = v.Selected,
+                    number = v.Number,
+                    urn = v.Urn
+                })
+            });
+        }
 
         [Authorize(Roles = "Worker"), HttpPost("{resumeId}/posters")]
         public async Task<IActionResult> UploadPoster([FromRoute] Guid resumeId, [FromForm] FormPoster data)
@@ -1225,7 +1302,7 @@ namespace Sisbi.Controllers
             {
                 poster.Selected = false;
             }
-            
+
             resume.Posters.Add(new ResumePoster
             {
                 Name = newGuid.ToString(),
@@ -1297,5 +1374,3 @@ namespace Sisbi.Controllers
         }
     }
 }
-
-//profile/resumes (фильтры на status) + vacancions

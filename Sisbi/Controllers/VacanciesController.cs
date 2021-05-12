@@ -88,6 +88,7 @@ namespace Sisbi.Controllers
                     name = vacancy.City.Name
                 },
                 schedule = vacancy.Schedule,
+                work_experience = vacancy.WorkExperience,
                 description = vacancy.Description,
                 user_id = vacancy.UserId
             });
@@ -116,6 +117,7 @@ namespace Sisbi.Controllers
                 CityId = body.CityId,
                 Schedule = body.Schedule,
                 Description = body.Description,
+                WorkExperience = body.WorkExperience,
                 Phone = body.Phone,
                 Email = body.Email,
                 UserId = userId,
@@ -139,6 +141,7 @@ namespace Sisbi.Controllers
                     name = city.Name
                 },
                 schedule = vacancy.Schedule,
+                work_experience = vacancy.WorkExperience,
                 description = vacancy.Description,
                 phone = vacancy.Phone,
                 email = vacancy.Email,
@@ -168,6 +171,7 @@ namespace Sisbi.Controllers
             vacancy.Salary = body.Salary;
             vacancy.CityId = body.CityId;
             vacancy.Schedule = body.Schedule;
+            vacancy.WorkExperience = body.WorkExperience;
             vacancy.Description = body.Description;
             vacancy.Phone = body.Phone;
             vacancy.Email = body.Email;
@@ -186,6 +190,7 @@ namespace Sisbi.Controllers
                     name = vacancy.City.Name
                 },
                 schedule = vacancy.Schedule,
+                work_experience = vacancy.WorkExperience,
                 description = vacancy.Description,
                 phone = vacancy.Phone,
                 email = vacancy.Email,
@@ -274,6 +279,7 @@ namespace Sisbi.Controllers
             [JsonPropertyName("salary")] public long Salary { get; set; }
             [JsonPropertyName("city_id")] public Guid CityId { get; set; }
             [JsonPropertyName("schedule")] public string Schedule { get; set; }
+            [JsonPropertyName("work_experience")] public int WorkExperience { get; set; }
             [JsonPropertyName("description")] public string Description { get; set; }
             [JsonPropertyName("email")] public string Email { get; set; }
             [JsonPropertyName("phone")] public string Phone { get; set; }
