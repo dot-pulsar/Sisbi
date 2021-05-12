@@ -19,11 +19,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="MimeKit" Version="2.11.0" />
+    <PackageReference Include="NinjaNye.SearchExtensions" Version="3.0.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.2" />
+    <PackageReference Include="Shell.NET" Version="0.2.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.1.1" />
     <PackageReference Include="Twilio" Version="5.56.0" />
     <PackageReference Include="Npgsql" Version="5.0.2" />
     <PackageReference Include="Dapper" Version="2.0.78" />
+    <PackageReference Include="Xabe.FFmpeg" Version="4.4.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Models\Models.csproj" />
@@ -45,7 +48,7 @@
     <Content Remove="vacancies\**" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="wwwroot\vacancies" />
+    <Folder Include="wwwroot\images" />
     <Folder Include="wwwroot\videos" />
   </ItemGroup>
 </Project>

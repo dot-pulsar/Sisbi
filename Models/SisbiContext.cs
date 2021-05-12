@@ -25,18 +25,22 @@ namespace Models
         public DbSet<FavoriteVacancy> FavoriteVacancies { get; set; }
         public DbSet<Response> Responses { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<ResumeVideo> ResumeVideos { get; set; }
+        public DbSet<ResumePoster> ResumePosters { get; set; }
+        public DbSet<VacancyVideo> VacancyVideos { get; set; }
+        public DbSet<VacancyPoster> VacancyPosters { get; set; }
 
-        /*private const string ConnectionString =
-            "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";*/
+        private const string ConnectionString =
+            "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";
 
-        /*public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
+        public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
 
         private static NpgsqlConnection GetPostgresConnection()
         {
             var connection = new NpgsqlConnection(ConnectionString);
             connection.Open();
             return connection;
-        }*/
+        }
 
         /*#region CRUD
 

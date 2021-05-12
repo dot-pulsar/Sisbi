@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
+using NinjaNye.SearchExtensions;
 using Sisbi.Extensions;
 
 namespace Sisbi.Controllers
@@ -25,6 +26,24 @@ namespace Sisbi.Controllers
         [Authorize(Roles = "Worker,Employer"), HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] GetAllQuery query)
         {
+            /*object result;
+            if (User.IsInRole("Worker"))
+            {
+                result = _context.Responses
+                    .Skip(query.Offset)
+                    .Take(query.Count)
+                    .Where(r => r.Resume.UserId == User.Id())
+                    .Select(r => new
+                    {
+                        id = r.Id,
+                        resume_id = r.Id,
+                        
+                    });
+            }
+            else
+            {
+            }*/
+
             var result = await _context.Responses
                 .Skip(query.Offset)
                 .Take(query.Count)
@@ -217,7 +236,8 @@ namespace Sisbi.Controllers
             {
                 ResumeId = resume.Id,
                 VacancyId = vacancy.Id,
-                Sender = User.IsInRole("Worker") ? Sender.Worker : Sender.Employer
+                Sender = User.IsInRole("Worker") ? "Worker" : "Employer",
+                Status = "Sended"
             };
 
             await _context.Responses.AddAsync(response);
@@ -226,7 +246,8 @@ namespace Sisbi.Controllers
             var result = new
             {
                 id = response.Id,
-                sender = response.Sender.ToString(),
+                sender = response.Sender,
+                status = response.Status,
                 resume = new
                 {
                     id = response.Resume.Id,
@@ -404,7 +425,9 @@ namespace Sisbi.Controllers
                 return BadRequest("У вас нет прав на удаление этого отклика!");
             }
 
-            _context.Responses.Remove(response);
+            //_context.Responses.Remove(response);
+
+            response.Status = "Deleted";
             await _context.SaveChangesAsync();
 
             return Ok(new

@@ -47,6 +47,7 @@ namespace Sisbi.Controllers
                     id = r.Id,
                     position = r.Position,
                     salary = r.Salary,
+                    work_experience = r.WorkExperience,
                     city = new
                     {
                         id = r.City.Id,

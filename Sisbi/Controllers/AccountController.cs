@@ -458,14 +458,14 @@ namespace Sisbi.Controllers
                 });
             }
 
-            if (string.IsNullOrEmpty(model.Password))
+            /*if (string.IsNullOrEmpty(model.Password))
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "The 'password' field is not in the correct format."
                 });
-            }
+            }*/
 
             var user = await GetUserAsync(model.Login, loginType);
 
@@ -478,33 +478,12 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var salt = GenerateSalt();
-            var newPassword = await Sha512Async(model.Password, salt);
-
-            user.Password = newPassword;
-            user.Salt = salt;
-
-            var refreshToken = new RefreshToken
-            {
-                Token = GenerateRefreshToken(),
-                ExpireIn = DateTime.UtcNow.AddDays(30).ToUnixTime(),
-                UserId = user.Id
-            };
-
             var now = DateTime.UtcNow.ToUnixTime();
-            var expireTokens = _context.RefreshTokens.Where(rt => now > rt.ExpireIn);
-
-            _context.RemoveRange(expireTokens);
-
-            await _context.RefreshTokens.AddAsync(refreshToken);
-
-            await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 success = true,
                 access_token = GenerateJwt(user.Id, user.Role),
-                refresh_token = refreshToken.Token,
                 expires_in = now + 40
             });
         }

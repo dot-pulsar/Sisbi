@@ -14,6 +14,8 @@ using Models;
 using Models.Entities;
 using Models.Enums;
 using Models.Requests;
+using NinjaNye.SearchExtensions;
+using Shell.NET;
 using Sisbi.Extensions;
 
 namespace Sisbi.Controllers
@@ -42,7 +44,41 @@ namespace Sisbi.Controllers
                 userId = User.Id();
             }
 
+            /*var saa = _context.Resumes.FromSqlRaw("SELECT *, salary as relevantt FROM resume");
+            foreach (var VARIABLE in saa)
+            {
+                Console.WriteLine(VARIABLE.Relevant);
+            }*/
             IQueryable<Resume> resumes = _context.Resumes;
+            var sql = new StringBuilder("SELECT * FROM resume WHERE ");
+            var whereAll = string.Empty;
+            var whereCities = new List<string>();
+            var whereMinWorkExperience = string.Empty;
+            var whereMaxWorkExperience = string.Empty;
+            var whereMinSalary = string.Empty;
+            var whereMaxSalary = string.Empty;
+            var whereLimit = string.Empty;
+            var wherePage = string.Empty;
+
+            if (!string.IsNullOrEmpty(query.Position))
+            {
+                var words = query.Position.Split(" ");
+
+                foreach (var word in words)
+                {
+                    if (!string.IsNullOrEmpty(word))
+                    {
+                        sql.Append($"position ILIKE '%{word}%' ");
+
+                        if (word != words.Last())
+                        {
+                            sql.Append("OR ");
+                        }
+                    }
+                }
+
+                resumes = resumes.Search(x => x.Position).Containing(words);
+            }
 
             /*if (!string.IsNullOrEmpty(query.Position))
             {
@@ -131,12 +167,18 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                resumes = resumes.Where(r => r.UserId != userId);
+                whereAll = $"user_id != {userId}";
+                //resumes = resumes.Where(r => r.UserId != userId);
             }
 
             if (query.Cities != null && query.Cities.Any())
             {
-                resumes = resumes.Where(r => query.Cities.Contains(r.CityId));
+                foreach (var city in query.Cities)
+                {
+                    whereCities.Add($"city == {city}");
+                }
+
+                //resumes = resumes.Where(r => query.Cities.Contains(r.CityId));
             }
 
             if (query.MinWorkExperience != 0)
@@ -150,7 +192,8 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                resumes = resumes.Where(r => r.WorkExperience >= query.MinWorkExperience);
+                whereMinWorkExperience = $"work_experience >= {query.MinWorkExperience}";
+                //resumes = resumes.Where(r => r.WorkExperience >= query.MinWorkExperience);
             }
 
             if (query.MaxWorkExperience != 0)
@@ -164,7 +207,9 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                resumes = resumes.Where(r => r.WorkExperience <= query.MaxWorkExperience);
+                whereMaxWorkExperience = $"work_experience <= {query.MaxWorkExperience}";
+
+                //resumes = resumes.Where(r => r.WorkExperience <= query.MaxWorkExperience);
             }
 
             if (query.MinSalary != 0)
@@ -178,7 +223,9 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                resumes = resumes.Where(r => r.Salary >= query.MinSalary);
+                whereMinSalary = $"salary >= {query.MinSalary}";
+
+                //resumes = resumes.Where(r => r.Salary >= query.MinSalary);
             }
 
             if (query.MaxSalary != 0)
@@ -192,8 +239,20 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                resumes = resumes.Where(r => r.Salary <= query.MaxSalary);
+                whereMaxSalary = $"salary <= {query.MaxSalary}";
+
+                //resumes = resumes.Where(r => r.Salary <= query.MaxSalary);
             }
+
+            /*if (whereAll != string.Empty
+                || whereCities.Any()
+                || whereMinWorkExperience != string.Empty
+                || whereMaxWorkExperience != string.Empty
+                || whereMinSalary != string.Empty
+                || whereMaxSalary != string.Empty)
+            {
+                sql.Append(" WHERE ");
+            }*/
 
             switch (query.Limit)
             {
@@ -235,10 +294,17 @@ namespace Sisbi.Controllers
 
             var total = await resumes.CountAsync();
 
+            sql.Append(
+                $"{whereAll} AND {whereMinWorkExperience} AND {whereMaxWorkExperience} AND {whereMinSalary} AND {whereMaxSalary} AND ");
+
+            foreach (var whereCity in whereCities)
+            {
+            }
+
             resumes = resumes.Skip(query.Page * query.Limit - query.Limit).Take(query.Limit);
 
             var perPage = await resumes.CountAsync();
-            var currentPage = query.Page; //Math.Ceiling((double) (total - (total - query.Page)) / perPage);
+            var currentPage = query.Page;
             var lastPage = Math.Ceiling((double) total / query.Limit);
 
             switch (query.SortBy)
@@ -269,6 +335,12 @@ namespace Sisbi.Controllers
                     break;
             }
 
+            var resp = sql.ToString().Replace("  AND", string.Empty);
+            if (resp.EndsWith("AND "))
+            {
+                resp = resp.Remove(resp.Length - 4);
+            }
+
             return Ok(new
             {
                 success = true,
@@ -290,7 +362,12 @@ namespace Sisbi.Controllers
                         schedule = r.Schedule,
                         description = r.Description,
                         status = r.Status,
-                        video = r.Video,
+                        videos = r.Videos.Select(v => new
+                        {
+                            name = v.Name,
+                            format = v.Format,
+                            urn = v.Urn
+                        }),
                         work_experience = r.WorkExperience,
                         places_of_work = r.PlacesOfWork
                             .Select(pow => new
@@ -336,7 +413,12 @@ namespace Sisbi.Controllers
                 schedule = resume.Schedule,
                 description = resume.Description,
                 status = resume.Status,
-                video = resume.Video,
+                videos = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    urn = v.Urn
+                }),
                 work_experience = resume.WorkExperience,
                 places_of_work = resume.PlacesOfWork
                     .Select(pow => new
@@ -408,7 +490,12 @@ namespace Sisbi.Controllers
                 phone = resume.Phone,
                 email = resume.Email,
                 status = resume.Status,
-                video = resume.Video,
+                videos = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    urn = v.Urn
+                }),
                 work_experience = resume.WorkExperience,
                 places_of_work = resume.PlacesOfWork,
                 date_of_creation = resume.DateOfCreation,
@@ -461,7 +548,12 @@ namespace Sisbi.Controllers
                 phone = resume.Phone,
                 email = resume.Email,
                 status = resume.Status,
-                video = resume.Video,
+                videos = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    urn = v.Urn
+                }),
                 work_experience = resume.WorkExperience,
                 places_of_work = resume.PlacesOfWork.Select(pow => new
                 {
@@ -915,10 +1007,171 @@ namespace Sisbi.Controllers
 
         #endregion
 
+        #region Contacts
+
+        [Authorize(Roles = "Employer"), HttpGet("{resumeId}/contacts")]
+        public async Task<IActionResult> GetContacts([FromRoute] Guid resumeId)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.FindAsync(resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found!"
+                });
+            }
+
+            var response = await _context.Responses.FirstOrDefaultAsync(r =>
+                r.Resume.UserId == resume.UserId && r.Vacancy.UserId == userId && r.Status == "Accepted");
+
+            if (response == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "У вас нет доступа к просмотру этого контакта"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                phone = resume.Phone,
+                email = resume.Email
+            });
+        }
+
+        #endregion
+
         #region Video
 
-        [Authorize(Roles = "Worker"), HttpPost("{resumeId}/video")]
+        [Authorize(Roles = "Worker"), HttpPost("{resumeId}/videos")]
         public async Task<IActionResult> UploadVideo([FromRoute] Guid resumeId, [FromForm] FormVideo data)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.FindAsync(resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found."
+                });
+            }
+
+            /*if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }*/
+
+            if (data.Video == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Video is equal to null!"
+                });
+            }
+
+            const string videosDir = "videos";
+            const string postersDir = "images";
+            var videos = Path.Combine(_hostingEnvironment.WebRootPath, videosDir);
+            var posters = Path.Combine(_hostingEnvironment.WebRootPath, postersDir);
+
+            var newGuid = Guid.NewGuid();
+            var videoName = $"{newGuid}.{data.Format}";
+            var videoPath = Path.Combine(videos, videoName);
+
+            await using Stream fileStream = new FileStream(videoPath, FileMode.Create);
+            await data.Video.CopyToAsync(fileStream);
+
+            var bash = new Bash();
+            var frameCountCommand =
+                bash.Command(
+                    $"ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 {videoPath}");
+
+            if (!int.TryParse(frameCountCommand.Output, out var frameCount))
+            {
+                Console.WriteLine(videoPath);
+                Console.WriteLine(frameCountCommand.ErrorMsg);
+            }
+
+            var frames = new List<int> {0, frameCount / 2, frameCount - 1};
+
+            var oldPosters = resume.Posters.Where(p => p.Type == "system").ToList();
+
+            if (oldPosters.Any())
+            {
+                oldPosters.ForEach(p => { System.IO.File.Delete(Path.Combine(posters, $"{p.Name}.{p.Format}")); });
+                _context.RemoveRange(oldPosters);
+            }
+
+            var number = 0;
+            foreach (var frame in frames)
+            {
+                var newPosterName = Guid.NewGuid().ToString();
+                const string newPosterFormat = "jpg";
+                var newPosterFullName = $"{newPosterName}.{newPosterFormat}";
+                var newPosterPath = Path.Combine(posters, newPosterFullName);
+
+                var s = $"ffmpeg -i {videoPath} -vf \"select=eq(n\\,{frame})\" -q:v 0 {newPosterPath}".Bash();
+
+                resume.Posters.Add(new ResumePoster
+                {
+                    Name = newPosterName,
+                    Format = newPosterFormat,
+                    Type = "system",
+                    Number = ++number,
+                    Selected = number == 1 && resume.Posters.All(p=>p.Type == "system")
+                });
+            }
+
+            if (resume.Videos.Any())
+            {
+                foreach (var video in resume.Videos)
+                {
+                    System.IO.File.Delete(Path.Combine(videos, $"{video.Name}.{video.Format}"));
+                }
+
+                resume.Videos.Clear();
+            }
+
+            resume.Videos.Add(new ResumeVideo
+            {
+                Name = newGuid.ToString(),
+                Format = data.Format,
+            });
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                data = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    urn = v.Urn
+                })
+            });
+        }
+
+        #endregion
+
+        #region Poster
+
+        [Authorize(Roles = "Worker"), HttpPost("{resumeId}/posters")]
+        public async Task<IActionResult> UploadPoster([FromRoute] Guid resumeId, [FromForm] FormPoster data)
         {
             var userId = User.Id();
 
@@ -942,29 +1195,60 @@ namespace Sisbi.Controllers
                 });
             }*/
 
-            const string videosDir = "videos";
-            var videos = Path.Combine(_hostingEnvironment.WebRootPath, videosDir);
-
-            var newGuid = Guid.NewGuid();
-            var videoName = $"{newGuid}.{data.Format}";
-            var videoPath = Path.Combine(videos, videoName);
-
-            if (!string.IsNullOrEmpty(resume.Video))
+            if (data.Poster == null)
             {
-                var oldVideoName = resume.Video.Split("/").Last();
-                Console.WriteLine(oldVideoName);
-                System.IO.File.Delete(Path.Combine(videos, oldVideoName));
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Poster is equal to null!"
+                });
             }
 
-            await using Stream fileStream = new FileStream(videoPath, FileMode.Create);
-            await data.Video.CopyToAsync(fileStream);
+            const string dir = "images";
+            var images = Path.Combine(_hostingEnvironment.WebRootPath, dir);
 
-            resume.Video = $"{Request.Scheme}://{Request.Host}/{videosDir}/{videoName}";
+            var newGuid = Guid.NewGuid();
+            var posterName = $"{newGuid}.{data.Format}";
+            var posterPath = Path.Combine(images, posterName);
+
+            await using Stream fileStream = new FileStream(posterPath, FileMode.Create);
+            await data.Poster.CopyToAsync(fileStream);
+
+            var oldPoster = resume.Posters.SingleOrDefault(p => p.Type == "custom");
+            if (oldPoster != null)
+            {
+                System.IO.File.Delete(Path.Combine(images, $"{oldPoster.Name}.{oldPoster.Format}"));
+                resume.Posters.Remove(oldPoster);
+            }
+
+            foreach (var poster in resume.Posters)
+            {
+                poster.Selected = false;
+            }
+            
+            resume.Posters.Add(new ResumePoster
+            {
+                Name = newGuid.ToString(),
+                Format = data.Format,
+                Selected = true,
+                Number = 4,
+                Type = "custom"
+            });
+
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
-                success = true
+                success = true,
+                data = resume.Posters.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    type = v.Type,
+                    selected = v.Selected,
+                    number = v.Number,
+                    urn = v.Urn
+                })
             });
         }
 

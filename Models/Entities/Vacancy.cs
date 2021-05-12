@@ -21,6 +21,8 @@ namespace Models.Entities
         [Column("status")] public string Status { get; set; }
         [Column("user_id")] public Guid UserId { get; set; }
         [Column("work_experience")] public long WorkExperience { get; set; }
+        [Column("date_of_creation")] public long DateOfCreation { get; set; }
+        [Column("date_of_change")] public long DateOfChange { get; set; }
 
         public virtual City City { get; set; }
     }

@@ -19,8 +19,11 @@
     </PackageReference>
     <PackageReference Include="MimeKit" Version="2.11.0" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="NinjaNye.SearchExtensions" Version="3.0.1" />
     <PackageReference Include="Npgsql" Version="5.0.2" />
     <PackageReference Include="Dapper" Version="2.0.78" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.2" />
+    <PackageReference Include="Shell.NET" Version="0.2.2" />
+    <PackageReference Include="Xabe.FFmpeg" Version="4.4.0" />
   </ItemGroup>
 </Project>

@@ -14,7 +14,7 @@ namespace Models.Entities
         [Column("start_date")] public string StartDate { get; set; }
         [Column("end_date")] public string EndDate { get; set; }
         [Column("resume_id")] public Guid ResumeId { get; set; }
+        
         public virtual Resume Resume { get; set; }
-
     }
 }

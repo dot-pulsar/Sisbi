@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Models
 {
-    public class FormVideo
+    public class FormPoster
     {
-        [FromForm(Name = "video")] public IFormFile Video { get; set; }
+        [FromForm(Name = "poster")] public IFormFile Poster { get; set; }
         [FromForm(Name = "format")] public string Format { get; set; }
     }
 }

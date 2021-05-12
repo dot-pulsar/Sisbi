@@ -10,6 +10,7 @@ namespace Models.Entities
         [Column("id")] public Guid Id { get; set; }
         [Column("first_name")] public string FirstName { get; set; }
         [Column("second_name")] public string SecondName { get; set; }
+        [Column("company")] public string Company { get; set; }
         [Column("gender",TypeName = "text")] public Gender Gender { get; set; }
         [Column("bdate")] public string BDate { get; set; }
         [Column("address")] public string Address { get; set; }
@@ -24,6 +25,7 @@ namespace Models.Entities
         [Column("password")] public string Password { get; set; }
         [Column("salt")] public string Salt { get; set; }
         [Column("role",TypeName = "text")] public Role Role { get; set; }
+        [Column("avatar")] public string Avatar { get; set; }
         [Column("registration_date")] public long RegistrationDate { get; set; }
 
         [NotMapped] public bool AlreadyRegistered => RegistrationDate != 0;
