@@ -4,11 +4,12 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
-using NinjaNye.SearchExtensions;
 using Sisbi.Extensions;
+using Sisbi.Hubs;
 
 namespace Sisbi.Controllers
 {
@@ -17,33 +18,17 @@ namespace Sisbi.Controllers
     public class ResponsesController : ControllerBase
     {
         private readonly SisbiContext _context;
+        private readonly IHubContext<ResponseHub> _responseHub;
 
-        public ResponsesController(SisbiContext context)
+        public ResponsesController(IHubContext<ResponseHub> responseHub, SisbiContext context)
         {
             _context = context;
+            _responseHub = responseHub;
         }
 
         [Authorize(Roles = "Worker,Employer"), HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] GetAllQuery query)
         {
-            /*object result;
-            if (User.IsInRole("Worker"))
-            {
-                result = _context.Responses
-                    .Skip(query.Offset)
-                    .Take(query.Count)
-                    .Where(r => r.Resume.UserId == User.Id())
-                    .Select(r => new
-                    {
-                        id = r.Id,
-                        resume_id = r.Id,
-                        
-                    });
-            }
-            else
-            {
-            }*/
-
             var result = await _context.Responses
                 .Skip(query.Offset)
                 .Take(query.Count)
@@ -127,10 +112,12 @@ namespace Sisbi.Controllers
                 });
             }
 
-            var result = new
+            return Ok(new
             {
+                succses = true,
                 id = response.Id,
-                sender = response.Sender.ToString(),
+                sender = response.Sender,
+                status = response.Status,
                 resume = new
                 {
                     id = response.Resume.Id,
@@ -143,21 +130,33 @@ namespace Sisbi.Controllers
                     },
                     schedule = response.Resume.Schedule,
                     description = response.Resume.Description,
-                    user_id = response.Resume.UserId,
-                    places_of_work = response.Resume.PlacesOfWork.Select(pow => new
+                    status = response.Resume.Status,
+                    videos = response.Resume.Videos.Select(v => new
                     {
-                        id = pow.Id,
-                        position = pow.Position,
-                        company = pow.Company,
-                        description = pow.Description,
-                        start_date = pow.StartDate,
-                        end_date = pow.EndDate,
-                        resume_id = pow.ResumeId
-                    })
+                        name = v.Name,
+                        format = v.Format,
+                        path = v.Urn
+                    }),
+                    work_experience = response.Resume.WorkExperience,
+                    places_of_work = response.Resume.PlacesOfWork
+                        .Select(pow => new
+                        {
+                            id = pow.Id,
+                            position = pow.Position,
+                            company = pow.Company,
+                            description = pow.Description,
+                            start_date = pow.StartDate,
+                            end_date = pow.EndDate,
+                            resume_id = pow.ResumeId
+                        })
+                        .ToList(),
+                    date_of_creation = response.Resume.DateOfCreation,
+                    date_of_change = response.Resume.DateOfChange,
+                    user_id = response.Resume.UserId
                 },
                 vacancy = new
                 {
-                    id = response.Vacancy.Id,
+                    id = response.Id,
                     position = response.Vacancy.Position,
                     salary = response.Vacancy.Salary,
                     city = new
@@ -167,15 +166,28 @@ namespace Sisbi.Controllers
                     },
                     schedule = response.Vacancy.Schedule,
                     description = response.Vacancy.Description,
+                    work_experience = response.Vacancy.WorkExperience,
+                    videos = response.Vacancy.Videos.Select(v => new
+                    {
+                        name = v.Name,
+                        format = v.Format,
+                        path = v.Urn
+                    }),
+                    poster = response.Vacancy.Posters.Select(p => new
+                    {
+                        id = p.Id,
+                        name = p.Name,
+                        format = p.Format,
+                        type = p.Type,
+                        selected = p.Selected,
+                        number = p.Number,
+                        path = p.Urn
+                    }).SingleOrDefault(p => p.selected),
+                    date_of_creation = response.Vacancy.DateOfCreation,
+                    date_of_change = response.Vacancy.DateOfChange,
+                    status = response.Vacancy.Status,
                     user_id = response.Vacancy.UserId
                 }
-            };
-
-
-            return Ok(new
-            {
-                succses = true,
-                response = result
             });
         }
 
@@ -231,13 +243,26 @@ namespace Sisbi.Controllers
                     description = "Такой отклик уже существует!"
                 });
             }
+            
+            const string status = "sended";
+            var sender = User.IsInRole("Worker") ? "Worker" : "Employer";
+            var recipientUserId = sender == "Worker" ? vacancy.UserId : resume.UserId;
+
+            await _responseHub.Clients.All.SendAsync("Notification", new
+            {
+                resume_id = resume.Id,
+                vacancy_id = vacancy.Id,
+                sender = sender,
+                status = status,
+                recipient_user_id = recipientUserId
+            });
 
             var response = new Response
             {
                 ResumeId = resume.Id,
                 VacancyId = vacancy.Id,
-                Sender = User.IsInRole("Worker") ? "Worker" : "Employer",
-                Status = "Sended"
+                Sender = sender,
+                Status = "sended"
             };
 
             await _context.Responses.AddAsync(response);
@@ -275,6 +300,7 @@ namespace Sisbi.Controllers
                 vacancy = new
                 {
                     id = response.Vacancy.Id,
+                    company = response.Vacancy.User.Company,
                     position = response.Vacancy.Position,
                     salary = response.Vacancy.Salary,
                     city = new
@@ -294,120 +320,6 @@ namespace Sisbi.Controllers
                 data = result
             });
         }
-
-        /*[Authorize(Roles = "Worker"), HttpPut("{id}")]
-        public async Task<IActionResult> Edit([FromRoute] Guid id, [FromBody] EditBody body)
-        {
-            var userId = User.Id();
-
-            var resume = await _context.Resumes.FindAsync(body.ResumeId);
-            var vacancy = await _context.Vacancies.FindAsync(body.VacancyId);
-
-            if (resume == null)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "resume not found!"
-                });
-            }
-
-            if (vacancy == null)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "vacancy not found!"
-                });
-            }
-
-            if (User.IsInRole("Worker") && resume.UserId != userId)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "у вас нет доступа к этому резюме!"
-                });
-            }
-
-            if (User.IsInRole("Employer") && vacancy.UserId != userId)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "у вас нет доступа к этой вакансии!"
-                });
-            }
-
-            if (await _context.Responses.AnyAsync(r => r.ResumeId == resume.Id && r.VacancyId == vacancy.Id))
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    description = "Такой отклик уже существует!"
-                });
-            }
-
-            var response = new Response
-            {
-                ResumeId = resume.Id,
-                VacancyId = vacancy.Id,
-                Sender = User.IsInRole("Worker") ? Sender.Worker : Sender.Employer
-            };
-
-            await _context.Responses.AddAsync(response);
-            await _context.SaveChangesAsync();
-
-            var result = new
-            {
-                id = response.Id,
-                sender = response.Sender.ToString(),
-                resume = new
-                {
-                    id = response.Resume.Id,
-                    position = response.Resume.Position,
-                    salary = response.Resume.Salary,
-                    city = new
-                    {
-                        id = response.Resume.City.Id,
-                        name = response.Resume.City.Name
-                    },
-                    schedule = response.Resume.Schedule,
-                    description = response.Resume.Description,
-                    user_id = response.Resume.UserId,
-                    places_of_work = response.Resume.PlaceOfWorks.Select(pow => new
-                    {
-                        id = pow.Id,
-                        position = pow.Position,
-                        company = pow.Company,
-                        description = pow.Description,
-                        start_date = pow.StartDate,
-                        end_date = pow.EndDate,
-                        resume_id = pow.ResumeId
-                    })
-                },
-                vacancy = new
-                {
-                    id = response.Vacancy.Id,
-                    position = response.Vacancy.Position,
-                    salary = response.Vacancy.Salary,
-                    city = new
-                    {
-                        id = response.Vacancy.City.Id,
-                        name = response.Vacancy.City.Name
-                    },
-                    schedule = response.Vacancy.Schedule,
-                    description = response.Vacancy.Description,
-                    user_id = response.Vacancy.UserId
-                }
-            };
-            
-            return Ok(new
-            {
-                success = true,
-                data = result
-            });
-        }*/
 
         [Authorize(Roles = "Worker,Employer"), HttpDelete("{id}")]
         public async Task<IActionResult> Delete([FromRoute] Guid id)

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -38,127 +39,32 @@ namespace Sisbi.Controllers
         [AllowAnonymous, HttpGet]
         public async Task<IActionResult> GetAllResumes([FromQuery] GetAllQueryResume query)
         {
-            var userId = Guid.Empty;
+            var workerId = Guid.Empty;
             if (User.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Worker"))
             {
-                userId = User.Id();
+                workerId = User.Id();
             }
 
-            /*var saa = _context.Resumes.FromSqlRaw("SELECT *, salary as relevantt FROM resume");
-            foreach (var VARIABLE in saa)
+            var employerId = Guid.Empty;
+            if (User.Identity != null && User.Identity.IsAuthenticated && User.IsInRole("Employer"))
             {
-                Console.WriteLine(VARIABLE.Relevant);
-            }*/
-            IQueryable<Resume> resumes = _context.Resumes;
-            var sql = new StringBuilder("SELECT * FROM resume WHERE ");
-            var whereAll = string.Empty;
-            var whereCities = new List<string>();
-            var whereMinWorkExperience = string.Empty;
-            var whereMaxWorkExperience = string.Empty;
-            var whereMinSalary = string.Empty;
-            var whereMaxSalary = string.Empty;
-            var whereLimit = string.Empty;
-            var wherePage = string.Empty;
+                employerId = User.Id();
+            }
+
+            var resumes = _context.Resumes.Where(r => r.Videos.Any());
 
             if (!string.IsNullOrEmpty(query.Position))
             {
-                var words = query.Position.Split(" ");
+                var words = query.Position.ToLower().Split(" ");
 
-                foreach (var word in words)
-                {
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        sql.Append($"position ILIKE '%{word}%' ");
+                Console.WriteLine(string.Join(" ", words));
 
-                        if (word != words.Last())
-                        {
-                            sql.Append("OR ");
-                        }
-                    }
-                }
-
-                resumes = resumes.Search(x => x.Position).Containing(words);
+                resumes = resumes.Search(x => x.Position.ToLower()).Containing(words);
             }
-
-            /*if (!string.IsNullOrEmpty(query.Position))
-            {
-                var words = query.Position.Split(" ");
-
-                var sql = new StringBuilder("SELECT * FROM resume WHERE ");
-
-                foreach (var word in words)
-                {
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        sql.Append($"position ILIKE '%{word}%' ");
-
-                        if (word != words.Last())
-                        {
-                            sql.Append("OR ");
-                        }
-                    }
-                }
-
-                sql.Append("OR ");
-
-                foreach (var word in words)
-                {
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        sql.Append($"description ILIKE '%{word}%' ");
-
-                        if (word != words.Last())
-                        {
-                            sql.Append("OR ");
-                        }
-                    }
-                }
-
-                sql.Append("ORDER BY ");
-
-                foreach (var word in words)
-                {
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        sql.Append($"CASE WHEN position ILIKE '%{word}%' THEN 2 ELSE 0 END ");
-
-
-                        sql.Append("+ ");
-                    }
-                }
-
-                foreach (var word in words)
-                {
-                    if (!string.IsNullOrEmpty(word))
-                    {
-                        sql.Append($"CASE WHEN description ILIKE '%{word}%' THEN 1 ELSE 0 END ");
-
-                        if (word != words.Last())
-                        {
-                            sql.Append("+ ");
-                        }
-                    }
-                }
-
-                sql.Append("DESC");
-
-                var all = _context.Resumes.FromSqlRaw(sql.ToString());
-
-                Console.WriteLine(sql.ToString());
-                Console.WriteLine(all.Count());
-
-                resumes = all;
-
-                //resumes = _context.Resumes.Where(r => words.Any(w=>r.Position.Contains(w)));
-            }
-            else
-            {
-                resumes = _context.Resumes;
-            }*/
 
             if (!query.All)
             {
-                if (userId == Guid.Empty)
+                if (workerId == Guid.Empty)
                 {
                     return BadRequest(new
                     {
@@ -167,18 +73,12 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                whereAll = $"user_id != {userId}";
-                //resumes = resumes.Where(r => r.UserId != userId);
+                resumes = resumes.Where(r => r.UserId != workerId);
             }
 
             if (query.Cities != null && query.Cities.Any())
             {
-                foreach (var city in query.Cities)
-                {
-                    whereCities.Add($"city == {city}");
-                }
-
-                //resumes = resumes.Where(r => query.Cities.Contains(r.CityId));
+                resumes = resumes.Where(r => query.Cities.Contains(r.CityId));
             }
 
             if (query.MinWorkExperience != 0)
@@ -192,8 +92,7 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                whereMinWorkExperience = $"work_experience >= {query.MinWorkExperience}";
-                //resumes = resumes.Where(r => r.WorkExperience >= query.MinWorkExperience);
+                resumes = resumes.Where(r => r.WorkExperience >= query.MinWorkExperience);
             }
 
             if (query.MaxWorkExperience != 0)
@@ -207,9 +106,7 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                whereMaxWorkExperience = $"work_experience <= {query.MaxWorkExperience}";
-
-                //resumes = resumes.Where(r => r.WorkExperience <= query.MaxWorkExperience);
+                resumes = resumes.Where(r => r.WorkExperience <= query.MaxWorkExperience);
             }
 
             if (query.MinSalary != 0)
@@ -223,9 +120,7 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                whereMinSalary = $"salary >= {query.MinSalary}";
-
-                //resumes = resumes.Where(r => r.Salary >= query.MinSalary);
+                resumes = resumes.Where(r => r.Salary >= query.MinSalary);
             }
 
             if (query.MaxSalary != 0)
@@ -239,20 +134,8 @@ namespace Sisbi.Controllers
                     });
                 }
 
-                whereMaxSalary = $"salary <= {query.MaxSalary}";
-
-                //resumes = resumes.Where(r => r.Salary <= query.MaxSalary);
+                resumes = resumes.Where(r => r.Salary <= query.MaxSalary);
             }
-
-            /*if (whereAll != string.Empty
-                || whereCities.Any()
-                || whereMinWorkExperience != string.Empty
-                || whereMaxWorkExperience != string.Empty
-                || whereMinSalary != string.Empty
-                || whereMaxSalary != string.Empty)
-            {
-                sql.Append(" WHERE ");
-            }*/
 
             switch (query.Limit)
             {
@@ -294,13 +177,6 @@ namespace Sisbi.Controllers
 
             var total = await resumes.CountAsync();
 
-            sql.Append(
-                $"{whereAll} AND {whereMinWorkExperience} AND {whereMaxWorkExperience} AND {whereMinSalary} AND {whereMaxSalary} AND ");
-
-            foreach (var whereCity in whereCities)
-            {
-            }
-
             resumes = resumes.Skip(query.Page * query.Limit - query.Limit).Take(query.Limit);
 
             var perPage = await resumes.CountAsync();
@@ -335,12 +211,6 @@ namespace Sisbi.Controllers
                     break;
             }
 
-            var resp = sql.ToString().Replace("  AND", string.Empty);
-            if (resp.EndsWith("AND "))
-            {
-                resp = resp.Remove(resp.Length - 4);
-            }
-
             return Ok(new
             {
                 success = true,
@@ -361,13 +231,6 @@ namespace Sisbi.Controllers
                         },
                         schedule = r.Schedule,
                         description = r.Description,
-                        status = r.Status,
-                        videos = r.Videos.Select(v => new
-                        {
-                            name = v.Name,
-                            format = v.Format,
-                            urn = v.Urn
-                        }),
                         work_experience = r.WorkExperience,
                         places_of_work = r.PlacesOfWork
                             .Select(pow => new
@@ -381,8 +244,67 @@ namespace Sisbi.Controllers
                                 resume_id = pow.ResumeId
                             })
                             .ToList(),
+                        videos = r.Videos.Select(v => new
+                        {
+                            name = v.Name,
+                            format = v.Format,
+                            path = v.Urn
+                        }),
+                        poster = r.Posters.Select(p => new
+                        {
+                            id = p.Id,
+                            name = p.Name,
+                            format = p.Format,
+                            type = p.Type,
+                            selected = p.Selected,
+                            number = p.Number,
+                            path = p.Urn
+                        }).SingleOrDefault(p => p.selected),
                         date_of_creation = r.DateOfCreation,
                         date_of_change = r.DateOfChange,
+                        status = r.Status,
+                        responses = r.Responses
+                            .Where(resp => resp.Vacancy.UserId == employerId)
+                            .Select(resp => new
+                            {
+                                id = resp.Id,
+                                vacancy = new
+                                {
+                                    id = resp.Vacancy.Id,
+                                    position = resp.Vacancy.Position,
+                                    salary = resp.Vacancy.Salary,
+                                    city = new
+                                    {
+                                        id = resp.Vacancy.City.Id,
+                                        name = resp.Vacancy.City.Name
+                                    },
+                                    schedule = resp.Vacancy.Schedule,
+                                    description = resp.Vacancy.Description,
+                                    work_experience = resp.Vacancy.WorkExperience,
+                                    videos = resp.Vacancy.Videos.Select(v => new
+                                    {
+                                        name = v.Name,
+                                        format = v.Format,
+                                        path = v.Urn
+                                    }),
+                                    poster = resp.Vacancy.Posters.Select(p => new
+                                    {
+                                        id = p.Id,
+                                        name = p.Name,
+                                        format = p.Format,
+                                        type = p.Type,
+                                        selected = p.Selected,
+                                        number = p.Number,
+                                        path = p.Urn
+                                    }).SingleOrDefault(p => p.selected),
+                                    date_of_creation = resp.Vacancy.DateOfCreation,
+                                    date_of_change = resp.Vacancy.DateOfChange,
+                                    status = resp.Vacancy.Status,
+                                    user_id = resp.Vacancy.UserId
+                                },
+                                sender = resp.Sender,
+                                status = resp.Status
+                            }),
                         user_id = r.UserId
                     })
                     .ToListAsync()
@@ -412,15 +334,8 @@ namespace Sisbi.Controllers
                 },
                 schedule = resume.Schedule,
                 description = resume.Description,
-                status = resume.Status,
-                videos = resume.Videos.Select(v => new
-                {
-                    name = v.Name,
-                    format = v.Format,
-                    urn = v.Urn
-                }),
                 work_experience = resume.WorkExperience,
-                places_of_work = resume.PlacesOfWork
+                places_of_work = resume.PlacesOfWork?
                     .Select(pow => new
                     {
                         id = pow.Id,
@@ -432,8 +347,25 @@ namespace Sisbi.Controllers
                         resume_id = pow.ResumeId
                     })
                     .OrderBy(pow => ParseDateTime(pow.start_date)),
+                videos = resume.Videos?.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    path = v.Urn
+                }),
+                poster = resume.Posters?.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    format = p.Format,
+                    type = p.Type,
+                    selected = p.Selected,
+                    number = p.Number,
+                    path = p.Urn
+                }).SingleOrDefault(p => p.selected),
                 date_of_creation = resume.DateOfCreation,
                 date_of_change = resume.DateOfChange,
+                status = resume.Status,
                 user_id = resume.UserId
             });
         }
@@ -487,19 +419,38 @@ namespace Sisbi.Controllers
                 },
                 schedule = resume.Schedule,
                 description = resume.Description,
+                work_experience = resume.WorkExperience,
+                places_of_work = resume.PlacesOfWork?.Select(pow => new
+                {
+                    id = pow.Id,
+                    position = pow.Position,
+                    company = pow.Company,
+                    description = pow.Description,
+                    start_date = pow.StartDate,
+                    end_date = pow.EndDate,
+                    resume_id = pow.ResumeId
+                }),
                 phone = resume.Phone,
                 email = resume.Email,
-                status = resume.Status,
-                videos = resume.Videos.Select(v => new
+                videos = resume.Videos?.Select(v => new
                 {
                     name = v.Name,
                     format = v.Format,
-                    urn = v.Urn
+                    path = v.Urn
                 }),
-                work_experience = resume.WorkExperience,
-                places_of_work = resume.PlacesOfWork,
+                poster = resume.Posters?.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    format = p.Format,
+                    type = p.Type,
+                    selected = p.Selected,
+                    number = p.Number,
+                    path = p.Urn
+                }).SingleOrDefault(p => p.selected),
                 date_of_creation = resume.DateOfCreation,
                 date_of_change = resume.DateOfChange,
+                status = resume.Status,
                 user_id = resume.UserId
             });
         }
@@ -545,17 +496,8 @@ namespace Sisbi.Controllers
                 },
                 schedule = resume.Schedule,
                 description = resume.Description,
-                phone = resume.Phone,
-                email = resume.Email,
-                status = resume.Status,
-                videos = resume.Videos.Select(v => new
-                {
-                    name = v.Name,
-                    format = v.Format,
-                    urn = v.Urn
-                }),
                 work_experience = resume.WorkExperience,
-                places_of_work = resume.PlacesOfWork.Select(pow => new
+                places_of_work = resume.PlacesOfWork?.Select(pow => new
                 {
                     id = pow.Id,
                     position = pow.Position,
@@ -565,8 +507,25 @@ namespace Sisbi.Controllers
                     end_date = pow.EndDate,
                     resume_id = pow.ResumeId
                 }),
+                videos = resume.Videos?.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    path = v.Urn
+                }),
+                poster = resume.Posters?.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    format = p.Format,
+                    type = p.Type,
+                    selected = p.Selected,
+                    number = p.Number,
+                    path = p.Urn
+                }).SingleOrDefault(p => p.selected),
                 date_of_creation = resume.DateOfCreation,
                 date_of_change = resume.DateOfChange,
+                status = resume.Status,
                 user_id = resume.UserId
             });
         }
@@ -1026,7 +985,7 @@ namespace Sisbi.Controllers
             }
 
             var response = await _context.Responses.FirstOrDefaultAsync(r =>
-                r.Resume.UserId == resume.UserId && r.Vacancy.UserId == userId && r.Status == "Accepted");
+                r.Resume.UserId == resume.UserId && r.Vacancy.UserId == userId && r.Status == "accepted");
 
             if (response == null)
             {
@@ -1047,7 +1006,7 @@ namespace Sisbi.Controllers
 
         #endregion
 
-        #region Video
+        #region Videos
 
         [Authorize(Roles = "Worker"), HttpGet("{resumeId}/videos")]
         public async Task<IActionResult> GetVideo([FromRoute] Guid resumeId)
@@ -1065,14 +1024,14 @@ namespace Sisbi.Controllers
                 });
             }
 
-            /*if (resume.UserId != userId)
+            if (resume.UserId != userId)
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "you are not authorized to use this resume_id"
                 });
-            }*/
+            }
 
             return Ok(new
             {
@@ -1081,7 +1040,7 @@ namespace Sisbi.Controllers
                 {
                     name = v.Name,
                     format = v.Format,
-                    urn = v.Urn
+                    path = v.Urn
                 })
             });
         }
@@ -1102,14 +1061,14 @@ namespace Sisbi.Controllers
                 });
             }
 
-            /*if (resume.UserId != userId)
+            if (resume.UserId != userId)
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "you are not authorized to use this resume_id"
                 });
-            }*/
+            }
 
             if (data.Video == null)
             {
@@ -1154,15 +1113,15 @@ namespace Sisbi.Controllers
             }
 
             var number = 0;
+            var postersPath = new List<string>();
             foreach (var frame in frames)
             {
                 var newPosterName = Guid.NewGuid().ToString();
                 const string newPosterFormat = "jpg";
                 var newPosterFullName = $"{newPosterName}.{newPosterFormat}";
                 var newPosterPath = Path.Combine(posters, newPosterFullName);
-
-                var s = $"ffmpeg -i {videoPath} -vf \"select=eq(n\\,{frame})\" -q:v 0 {newPosterPath}".Bash();
-
+                postersPath.Add(newPosterPath);
+                $"ffmpeg -i {videoPath} -frames:v 1 -vf \"select=eq(n\\,{frame})\" -q:v 0 {newPosterPath}".Bash();
                 resume.Posters.Add(new ResumePoster
                 {
                     Name = newPosterName,
@@ -1191,18 +1150,33 @@ namespace Sisbi.Controllers
 
             await _context.SaveChangesAsync();
 
+            while (!postersPath.All(System.IO.File.Exists))
+            {
+                await Task.Delay(500);
+            }
+
             return Ok(new
             {
                 success = true,
-                data = resume.Videos.Select(v => new
+                videos = resume.Videos.Select(v => new
                 {
                     name = v.Name,
                     format = v.Format,
-                    urn = v.Urn
+                    path = v.Urn
+                }),
+                posters = resume.Posters.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    format = p.Format,
+                    type = p.Type,
+                    selected = p.Selected,
+                    number = p.Number,
+                    path = p.Urn
                 })
             });
         }
-        
+
         #endregion
 
         #region Poster
@@ -1223,26 +1197,27 @@ namespace Sisbi.Controllers
                 });
             }
 
-            /*if (resume.UserId != userId)
+            if (resume.UserId != userId)
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "you are not authorized to use this resume_id"
                 });
-            }*/
+            }
 
             return Ok(new
             {
                 success = true,
                 data = resume.Posters.Select(v => new
                 {
+                    id = v.Id,
                     name = v.Name,
                     format = v.Format,
                     type = v.Type,
                     selected = v.Selected,
                     number = v.Number,
-                    urn = v.Urn
+                    path = v.Urn
                 })
             });
         }
@@ -1263,14 +1238,14 @@ namespace Sisbi.Controllers
                 });
             }
 
-            /*if (resume.UserId != userId)
+            if (resume.UserId != userId)
             {
                 return BadRequest(new
                 {
                     success = false,
                     description = "you are not authorized to use this resume_id"
                 });
-            }*/
+            }
 
             if (data.Poster == null)
             {
@@ -1319,13 +1294,64 @@ namespace Sisbi.Controllers
                 success = true,
                 data = resume.Posters.Select(v => new
                 {
+                    id = v.Id,
                     name = v.Name,
                     format = v.Format,
                     type = v.Type,
                     selected = v.Selected,
                     number = v.Number,
-                    urn = v.Urn
+                    path = v.Urn
                 })
+            });
+        }
+
+        [Authorize(Roles = "Worker"), HttpPost("{resumeId}/posters/{posterId}/select")]
+        public async Task<IActionResult> SelectPoster([FromRoute] Guid resumeId, [FromRoute] Guid posterId)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.SingleOrDefaultAsync(p => p.Id == resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found."
+                });
+            }
+
+            if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }
+
+            var poster = resume.Posters.SingleOrDefault(r => r.Id == posterId);
+            if (poster == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Poster not found."
+                });
+            }
+
+            foreach (var rPoster in resume.Posters)
+            {
+                rPoster.Selected = false;
+            }
+
+            poster.Selected = true;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true
             });
         }
 

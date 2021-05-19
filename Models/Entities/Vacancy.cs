@@ -19,11 +19,16 @@ namespace Models.Entities
         [Column("phone")] public string Phone { get; set; }
         [Column("video")] public string Video { get; set; }
         [Column("status")] public string Status { get; set; }
-        [Column("user_id")] public Guid UserId { get; set; }
         [Column("work_experience")] public long WorkExperience { get; set; }
         [Column("date_of_creation")] public long DateOfCreation { get; set; }
         [Column("date_of_change")] public long DateOfChange { get; set; }
 
+        [Column("user_id")] public Guid UserId { get; set; }
+
+        public virtual User User { get; set; }
         public virtual City City { get; set; }
+        public virtual ICollection<Response> Responses { get; set; }
+        public virtual ICollection<VacancyVideo> Videos { get; set; }
+        public virtual ICollection<VacancyPoster> Posters { get; set; }
     }
 }

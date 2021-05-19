@@ -9,6 +9,9 @@ namespace Models.Entities
         [Column("id")] public Guid Id { get; set; }
         [Column("name")] public string Name { get; set; }
         [Column("format")] public string Format { get; set; }
+        [Column("type")] public string Type { get; set; }
+        [Column("selected")] public bool Selected { get; set; }
+        [Column("number")] public int Number { get; set; }
         [Column("vacancy_id")] public Guid VacancyId { get; set; }
         public virtual Vacancy Vacancy { get; set; }
         [NotMapped] public string Urn => $"images/{Name}.{Format}";

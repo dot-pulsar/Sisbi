@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -13,7 +12,6 @@ using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
 using Models.Enums;
-using Newtonsoft.Json;
 using Sisbi.Extensions;
 
 namespace Sisbi.Controllers
@@ -197,13 +195,6 @@ namespace Sisbi.Controllers
                         },
                         schedule = r.Schedule,
                         description = r.Description,
-                        status = r.Status,
-                        videos = r.Videos.Select(v => new
-                        {
-                            name = v.Name,
-                            format = v.Format,
-                            urn = v.Urn
-                        }),
                         work_experience = r.WorkExperience,
                         places_of_work = r.PlacesOfWork
                             .Select(pow => new
@@ -217,8 +208,25 @@ namespace Sisbi.Controllers
                                 resume_id = pow.ResumeId
                             })
                             .ToList(),
+                        videos = r.Videos.Select(v => new
+                        {
+                            name = v.Name,
+                            format = v.Format,
+                            path = v.Urn
+                        }),
+                        poster = r.Posters.Select(p => new
+                        {
+                            id = p.Id,
+                            name = p.Name,
+                            format = p.Format,
+                            type = p.Type,
+                            selected = p.Selected,
+                            number = p.Number,
+                            path = p.Urn
+                        }).SingleOrDefault(p => p.selected),
                         date_of_creation = r.DateOfCreation,
                         date_of_change = r.DateOfChange,
+                        status = r.Status,
                         user_id = r.UserId
                     })
             });
@@ -232,21 +240,41 @@ namespace Sisbi.Controllers
             return Ok(new
             {
                 success = true,
-                data = vacancies.Select(r => new
-                {
-                    id = r.Id,
-                    position = r.Position,
-                    salary = r.Salary,
-                    work_experience = r.WorkExperience,
-                    city = new
+                data = vacancies
+                    .Select(r => new
                     {
-                        id = r.City.Id,
-                        name = r.City.Name
-                    },
-                    schedule = r.Schedule,
-                    description = r.Description,
-                    user_id = r.UserId
-                })
+                        id = r.Id,
+                        position = r.Position,
+                        salary = r.Salary,
+                        city = new
+                        {
+                            id = r.City.Id,
+                            name = r.City.Name
+                        },
+                        schedule = r.Schedule,
+                        description = r.Description,
+                        work_experience = r.WorkExperience,
+                        videos = r.Videos.Select(v => new
+                        {
+                            name = v.Name,
+                            format = v.Format,
+                            path = v.Urn
+                        }),
+                        poster = r.Posters.Select(p => new
+                        {
+                            id = p.Id,
+                            name = p.Name,
+                            format = p.Format,
+                            type = p.Type,
+                            selected = p.Selected,
+                            number = p.Number,
+                            path = p.Urn
+                        }).SingleOrDefault(p => p.selected),
+                        date_of_creation = r.DateOfCreation,
+                        date_of_change = r.DateOfChange,
+                        status = r.Status,
+                        user_id = r.UserId
+                    })
             });
         }
 
@@ -315,6 +343,59 @@ namespace Sisbi.Controllers
                 var currentPage = query.Page;
                 var lastPage = Math.Ceiling((double) total / query.Limit);
 
+                if (User.IsInRole("Worker"))
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        total = total,
+                        per_page = perPage,
+                        current_page = currentPage,
+                        last_page = lastPage,
+                        data = data
+                            .Select(r => new
+                            {
+                                id = r.Id,
+                                vacancy = new
+                                {
+                                    id = r.Vacancy.Id,
+                                    position = r.Vacancy.Position,
+                                    salary = r.Vacancy.Salary,
+                                    city = new
+                                    {
+                                        id = r.Vacancy.City.Id,
+                                        name = r.Vacancy.City.Name
+                                    },
+                                    schedule = r.Vacancy.Schedule,
+                                    description = r.Vacancy.Description,
+                                    work_experience = r.Vacancy.WorkExperience,
+                                    videos = r.Vacancy.Videos.Select(v => new
+                                    {
+                                        name = v.Name,
+                                        format = v.Format,
+                                        path = v.Urn
+                                    }),
+                                    poster = r.Vacancy.Posters.Select(p => new
+                                    {
+                                        id = p.Id,
+                                        name = p.Name,
+                                        format = p.Format,
+                                        type = p.Type,
+                                        selected = p.Selected,
+                                        number = p.Number,
+                                        path = p.Urn
+                                    }).SingleOrDefault(p => p.selected),
+                                    date_of_creation = r.Vacancy.DateOfCreation,
+                                    date_of_change = r.Vacancy.DateOfChange,
+                                    status = r.Vacancy.Status,
+                                    user_id = r.Vacancy.UserId
+                                },
+                                sender = r.Sender,
+                                status = r.Status
+                            })
+                    });
+                }
+
                 return Ok(new
                 {
                     success = true,
@@ -325,39 +406,55 @@ namespace Sisbi.Controllers
                     data = data
                         .Select(r => new
                         {
-                            id = r.Resume.Id,
-                            position = r.Resume.Position,
-                            salary = r.Resume.Salary,
-                            city = new
+                            id = r.Id,
+                            resume = new
                             {
-                                id = r.Resume.City.Id,
-                                name = r.Resume.City.Name
-                            },
-                            schedule = r.Resume.Schedule,
-                            description = r.Resume.Description,
-                            status = r.Resume.Status,
-                            videos = r.Resume.Videos.Select(v => new
-                            {
-                                name = v.Name,
-                                format = v.Format,
-                                urn = v.Urn
-                            }),
-                            work_experience = r.Resume.WorkExperience,
-                            places_of_work = r.Resume.PlacesOfWork
-                                .Select(pow => new
+                                id = r.Resume.Id,
+                                position = r.Resume.Position,
+                                salary = r.Resume.Salary,
+                                city = new
                                 {
-                                    id = pow.Id,
-                                    position = pow.Position,
-                                    company = pow.Company,
-                                    description = pow.Description,
-                                    start_date = pow.StartDate,
-                                    end_date = pow.EndDate,
-                                    resume_id = pow.ResumeId
-                                })
-                                .ToList(),
-                            date_of_creation = r.Resume.DateOfCreation,
-                            date_of_change = r.Resume.DateOfChange,
-                            user_id = r.Resume.UserId
+                                    id = r.Resume.City.Id,
+                                    name = r.Resume.City.Name
+                                },
+                                schedule = r.Resume.Schedule,
+                                description = r.Resume.Description,
+                                work_experience = r.Resume.WorkExperience,
+                                places_of_work = r.Resume.PlacesOfWork
+                                    .Select(pow => new
+                                    {
+                                        id = pow.Id,
+                                        position = pow.Position,
+                                        company = pow.Company,
+                                        description = pow.Description,
+                                        start_date = pow.StartDate,
+                                        end_date = pow.EndDate,
+                                        resume_id = pow.ResumeId
+                                    })
+                                    .ToList(),
+                                videos = r.Resume.Videos.Select(v => new
+                                {
+                                    name = v.Name,
+                                    format = v.Format,
+                                    path = v.Urn
+                                }),
+                                poster = r.Resume.Posters.Select(p => new
+                                {
+                                    id = p.Id,
+                                    name = p.Name,
+                                    format = p.Format,
+                                    type = p.Type,
+                                    selected = p.Selected,
+                                    number = p.Number,
+                                    path = p.Urn
+                                }).SingleOrDefault(p => p.selected),
+                                date_of_creation = r.Resume.DateOfCreation,
+                                date_of_change = r.Resume.DateOfChange,
+                                status = r.Resume.Status,
+                                user_id = r.Resume.UserId
+                            },
+                            sender = r.Sender,
+                            status = r.Status
                         })
                 });
             }
@@ -408,7 +505,7 @@ namespace Sisbi.Controllers
                                 {
                                     name = v.Name,
                                     format = v.Format,
-                                    urn = v.Urn
+                                    path = v.Urn
                                 }),
                                 work_experience = r.Resume.WorkExperience,
                                 places_of_work = r.Resume.PlacesOfWork
@@ -429,10 +526,9 @@ namespace Sisbi.Controllers
                             },
                             vacancy = new
                             {
-                                id = r.Vacancy.Id,
+                                id = r.Id,
                                 position = r.Vacancy.Position,
                                 salary = r.Vacancy.Salary,
-                                work_experience = r.Vacancy.WorkExperience,
                                 city = new
                                 {
                                     id = r.Vacancy.City.Id,
@@ -440,8 +536,26 @@ namespace Sisbi.Controllers
                                 },
                                 schedule = r.Vacancy.Schedule,
                                 description = r.Vacancy.Description,
+                                work_experience = r.Vacancy.WorkExperience,
+                                videos = r.Vacancy.Videos.Select(v => new
+                                {
+                                    name = v.Name,
+                                    format = v.Format,
+                                    path = v.Urn
+                                }),
+                                poster = r.Vacancy.Posters.Select(p => new
+                                {
+                                    id = p.Id,
+                                    name = p.Name,
+                                    format = p.Format,
+                                    type = p.Type,
+                                    selected = p.Selected,
+                                    number = p.Number,
+                                    path = p.Urn
+                                }).SingleOrDefault(p => p.selected),
                                 date_of_creation = r.Vacancy.DateOfCreation,
                                 date_of_change = r.Vacancy.DateOfChange,
+                                status = r.Vacancy.Status,
                                 user_id = r.Vacancy.UserId
                             },
                             sender = r.Sender,
@@ -466,6 +580,8 @@ namespace Sisbi.Controllers
                 });
             }
 
+            string role;
+
             if (User.IsInRole("Worker"))
             {
                 if (response.Resume.UserId != userId)
@@ -476,6 +592,8 @@ namespace Sisbi.Controllers
                         description = "У вас нет прав на просмотр этого отклика"
                     });
                 }
+
+                role = "Worker";
             }
             else
             {
@@ -487,11 +605,18 @@ namespace Sisbi.Controllers
                         description = "У вас нет прав на просмотр этого отклика"
                     });
                 }
+
+                role = "Employer";
+            }
+
+            if (response.Sender != role && response.Status == "sended")
+            {
+                response.Status = "readed";
+                await _context.SaveChangesAsync();
             }
 
             return Ok(new
             {
-                success = true,
                 id = response.Id,
                 resume = new
                 {
@@ -510,7 +635,7 @@ namespace Sisbi.Controllers
                     {
                         name = v.Name,
                         format = v.Format,
-                        urn = v.Urn
+                        path = v.Urn
                     }),
                     work_experience = response.Resume.WorkExperience,
                     places_of_work = response.Resume.PlacesOfWork
@@ -534,7 +659,6 @@ namespace Sisbi.Controllers
                     id = response.Vacancy.Id,
                     position = response.Vacancy.Position,
                     salary = response.Vacancy.Salary,
-                    work_experience = response.Vacancy.WorkExperience,
                     city = new
                     {
                         id = response.Vacancy.City.Id,
@@ -542,8 +666,26 @@ namespace Sisbi.Controllers
                     },
                     schedule = response.Vacancy.Schedule,
                     description = response.Vacancy.Description,
+                    work_experience = response.Vacancy.WorkExperience,
+                    videos = response.Vacancy.Videos.Select(v => new
+                    {
+                        name = v.Name,
+                        format = v.Format,
+                        path = v.Urn
+                    }),
+                    poster = response.Vacancy.Posters.Select(p => new
+                    {
+                        id = p.Id,
+                        name = p.Name,
+                        format = p.Format,
+                        type = p.Type,
+                        selected = p.Selected,
+                        number = p.Number,
+                        path = p.Urn
+                    }).SingleOrDefault(p => p.selected),
                     date_of_creation = response.Vacancy.DateOfCreation,
                     date_of_change = response.Vacancy.DateOfChange,
+                    status = response.Vacancy.Status,
                     user_id = response.Vacancy.UserId
                 },
                 sender = response.Sender,
@@ -591,6 +733,156 @@ namespace Sisbi.Controllers
             {
                 success = true,
                 avatar = user.Avatar
+            });
+        }
+
+        [Authorize(Roles = "Worker,Employer"), HttpPost("responses/{responseId}/accept")]
+        public async Task<IActionResult> AcceptResponse([FromRoute] Guid responseId)
+        {
+            var userId = User.Id();
+            var response = await _context.Responses.FindAsync(responseId);
+
+            if (response == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Response not found!"
+                });
+            }
+
+            string role;
+
+            if (User.IsInRole("Worker"))
+            {
+                if (response.Resume.UserId != userId)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "У вас нет прав на взаимодействие с этим откликом"
+                    });
+                }
+
+                role = "Worker";
+            }
+            else
+            {
+                if (response.Vacancy.UserId != userId)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "У вас нет прав на взаимодействие с этим откликом"
+                    });
+                }
+
+                role = "Employer";
+            }
+
+            if (response.Sender != role)
+            {
+                if (response.Status == "readed")
+                {
+                    response.Status = "accepted";
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = $"Вы не можете откликнуться если объявление имеет статус {response.Status}"
+                    });
+                }
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Вы не можете откликнуться пока объявление не будет просмотрено"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true
+            });
+        }
+
+        [Authorize(Roles = "Worker,Employer"), HttpPost("responses/{responseId}/reject")]
+        public async Task<IActionResult> RejectResponse([FromRoute] Guid responseId)
+        {
+            var userId = User.Id();
+            var response = await _context.Responses.FindAsync(responseId);
+
+            if (response == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Response not found!"
+                });
+            }
+
+            string role;
+
+            if (User.IsInRole("Worker"))
+            {
+                if (response.Resume.UserId != userId)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "У вас нет прав на взаимодействие с этим откликом"
+                    });
+                }
+
+                role = "Worker";
+            }
+            else
+            {
+                if (response.Vacancy.UserId != userId)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = "У вас нет прав на взаимодействие с этим откликом"
+                    });
+                }
+
+                role = "Employer";
+            }
+
+            if (response.Sender != role)
+            {
+                if (response.Status == "readed")
+                {
+                    response.Status = "rejected";
+                    await _context.SaveChangesAsync();
+                }
+                else
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        description = $"Вы не можете отклонить отклик если объявление имеет статус {response.Status}"
+                    });
+                }
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Вы не можете отклонить отклик пока объявление не будет просмотрено"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true
             });
         }
 
