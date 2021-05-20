@@ -8,11 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Models;
 using Models.Entities;
 using Models.Enums;
 using Sisbi.Extensions;
+using Sisbi.Hubs;
 
 namespace Sisbi.Controllers
 {
@@ -22,9 +24,11 @@ namespace Sisbi.Controllers
     {
         private readonly SisbiContext _context;
         private readonly IWebHostEnvironment _hostingEnvironment;
+        private readonly IHubContext<ResponseHub> _responseHub;
 
-        public ProfileController(IWebHostEnvironment hostingEnvironment, SisbiContext context)
+        public ProfileController(IHubContext<ResponseHub> responseHub, IWebHostEnvironment hostingEnvironment, SisbiContext context)
         {
+            _responseHub = responseHub;
             _hostingEnvironment = hostingEnvironment;
             _context = context;
         }
@@ -784,8 +788,22 @@ namespace Sisbi.Controllers
             {
                 if (response.Status == "readed")
                 {
-                    response.Status = "accepted";
+                    const string status = "accepted";
+                    response.Status = status;
+                    
                     await _context.SaveChangesAsync();
+                    
+                    var sender = User.IsInRole("Worker") ? "Worker" : "Employer";
+                    var recipientUserId = sender == "Worker" ? response.Vacancy.UserId : response.Resume.UserId;
+
+                    await _responseHub.Clients.All.SendAsync("Notification", new
+                    {
+                        resume_id = response.Resume.Id,
+                        vacancy_id = response.Vacancy.Id,
+                        sender = sender,
+                        status = status,
+                        recipient_user_id = recipientUserId
+                    });
                 }
                 else
                 {
@@ -859,8 +877,21 @@ namespace Sisbi.Controllers
             {
                 if (response.Status == "readed")
                 {
-                    response.Status = "rejected";
+                    const string status = "rejected";
+                    response.Status = status;
                     await _context.SaveChangesAsync();
+                    
+                    var sender = User.IsInRole("Worker") ? "Worker" : "Employer";
+                    var recipientUserId = sender == "Worker" ? response.Vacancy.UserId : response.Resume.UserId;
+
+                    await _responseHub.Clients.All.SendAsync("Notification", new
+                    {
+                        resume_id = response.Resume.Id,
+                        vacancy_id = response.Vacancy.Id,
+                        sender = sender,
+                        status = status,
+                        recipient_user_id = recipientUserId
+                    });
                 }
                 else
                 {

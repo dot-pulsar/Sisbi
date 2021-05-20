@@ -262,7 +262,7 @@ namespace Sisbi.Controllers
                 ResumeId = resume.Id,
                 VacancyId = vacancy.Id,
                 Sender = sender,
-                Status = "sended"
+                Status = status
             };
 
             await _context.Responses.AddAsync(response);

@@ -9,8 +9,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 using Models;
 using Models.Entities;
 using Models.Enums;
@@ -1045,8 +1047,231 @@ namespace Sisbi.Controllers
             });
         }
 
+        private class Video
+        {
+            public string Name { get; set; }
+            public string Format { get; set; }
+            public string FullName => $"{Name}.{Format}";
+            public string Path { get; set; }
+        }
+
+        [NonAction]
+        private async Task<Video> UploadTempVideo(IFormFile file)
+        {
+            var videoName = Guid.NewGuid().ToString();
+            var videoFormat = "tmp";
+            var videoFullName = $"{videoName}.{videoFormat}";
+
+            var rootPath = Path.Combine(_hostingEnvironment.WebRootPath, "videos");
+            var videoPath = Path.Combine(rootPath, videoFullName);
+
+            await using var fs = new FileStream(videoPath, FileMode.Create);
+            await file.CopyToAsync(fs);
+
+            return new Video
+            {
+                Name = videoName,
+                Format = videoFormat,
+                Path = videoPath
+            };
+        }
+
+        [NonAction]
+        private async Task<List<ResumePoster>> CreatePosters(string tempVideoPath)
+        {
+            var posters = new List<ResumePoster>();
+            var bash = new Bash();
+            var frameCountCmd =
+                bash.Command(
+                    $"ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 {tempVideoPath}");
+                
+
+            if (!int.TryParse(frameCountCmd.Output, out var frameCount))
+            {
+                Console.WriteLine(tempVideoPath);
+                Console.WriteLine(frameCountCmd.ErrorMsg);
+            }
+
+            var frame1 = (int) (frameCount * 0.05);
+            var frame2 = (int) (frameCount * 0.30);
+            var frame3 = (int) (frameCount * 0.75);
+            var frames = new List<int> {frame1, frame2, frame3};
+
+            var number = 0;
+            var postersPath = new List<string>();
+            foreach (var frame in frames)
+            {
+                var posterName = Guid.NewGuid().ToString();
+                var posterFormat = "jpg";
+                var posterFullName = $"{posterName}.{posterFormat}";
+
+                var rootPath = Path.Combine(_hostingEnvironment.WebRootPath, "images");
+                var posterPath = Path.Combine(rootPath, posterFullName);
+
+                $"ffmpeg -i {tempVideoPath} -frames:v 1 -vf \"select=eq(n\\,{frame})\" -q:v 0 {posterPath}".Bash();
+
+                posters.Add(new ResumePoster
+                {
+                    Name = posterName,
+                    Format = posterFormat,
+                    Type = "system",
+                    Number = ++number,
+                    Selected = number == 1 && posters.All(p => p.Type == "system")
+                });
+
+                postersPath.Add(posterPath);
+            }
+
+            while (!postersPath.All(System.IO.File.Exists))
+            {
+                await Task.Delay(500);
+            }
+
+            return posters;
+        }
+
+        [NonAction]
+        private async Task<List<ResumeVideo>> CreateVideos(string tempVideoPath)
+        {
+            var videos = new List<ResumeVideo>();
+            var bash = new Bash();
+
+            var resolutionCommand =
+                bash.Command(
+                    $"ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 {tempVideoPath}");
+
+            var resolution = resolutionCommand.Output
+                .Split(",")
+                .Select(int.Parse)
+                .ToArray();
+
+            var width = resolution[0];
+            var height = resolution[1];
+
+            var qualities = new List<int> {1080, 720, 480, 360, 240, 144};
+            qualities = qualities.Where(q => height >= q).ToList();
+
+            var videosPath = new List<string>();
+            qualities.ForEach(quality =>
+            {
+                var videoName = Guid.NewGuid().ToString();
+                var videoFormat = "mp4";
+                var videoFullName = $"{videoName}.{videoFormat}";
+
+                var rootPath = Path.Combine(_hostingEnvironment.WebRootPath, "videos");
+                var videoPath = Path.Combine(rootPath, videoFullName);
+
+                bash.Command(
+                    $"ffmpeg -i {tempVideoPath} -vf scale=-2:{quality} -c:v libx264 -preset slow -crf 22 -c:a copy {videoPath}");
+
+                videos.Add(new ResumeVideo
+                {
+                    Name = videoName,
+                    Format = videoFormat
+                });
+
+                videosPath.Add(videoPath);
+            });
+
+            while (!videosPath.All(System.IO.File.Exists))
+            {
+                await Task.Delay(500);
+            }
+
+            return videos;
+        }
+
         [Authorize(Roles = "Worker"), HttpPost("{resumeId}/videos")]
         public async Task<IActionResult> UploadVideo([FromRoute] Guid resumeId, [FromForm] FormVideo data)
+        {
+            var userId = User.Id();
+
+            var resume = await _context.Resumes.FindAsync(resumeId);
+
+            if (resume == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Resume not found."
+                });
+            }
+
+            if (resume.UserId != userId)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "you are not authorized to use this resume_id"
+                });
+            }
+
+            if (data.Video == null)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    description = "Video is equal to null!"
+                });
+            }
+
+            var tempVideo = await UploadTempVideo(data.Video);
+            var posters = await CreatePosters(tempVideo.Path);
+            var videos = await CreateVideos(tempVideo.Path);
+
+            //ffmpeg -i h_3840x2160_16:9.mp4 -vf scale=-2:1080 -c:v libx264 -preset slow -crf 22 -c:a copy out.mp4
+            //ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 out.mp4
+
+            var postersRootPath = Path.Combine(_hostingEnvironment.WebRootPath, "images");
+            var videosRootPath = Path.Combine(_hostingEnvironment.WebRootPath, "videos");
+
+            resume.Posters
+                .Where(p => p.Type == "system")
+                .ToList()
+                .ForEach(p =>
+                {
+                    System.IO.File.Delete(Path.Combine(postersRootPath, $"{p.Name}.{p.Format}"));
+                    resume.Posters.Remove(p);
+                });
+
+            resume.Videos
+                .ToList()
+                .ForEach(v =>
+                {
+                    System.IO.File.Delete(Path.Combine(videosRootPath, $"{v.Name}.{v.Format}"));
+                    resume.Videos.Remove(v);
+                });
+
+            posters.ForEach(resume.Posters.Add);
+            videos.ForEach(resume.Videos.Add);
+            System.IO.File.Delete(Path.Combine(videosRootPath, tempVideo.Path));
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                videos = resume.Videos.Select(v => new
+                {
+                    name = v.Name,
+                    format = v.Format,
+                    path = v.Urn
+                }),
+                posters = resume.Posters.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    format = p.Format,
+                    type = p.Type,
+                    selected = p.Selected,
+                    number = p.Number,
+                    path = p.Urn
+                })
+            });
+        }
+
+        [Authorize(Roles = "Worker"), HttpPatch("{resumeId}/videos")]
+        public async Task<IActionResult> UploadVideoo([FromRoute] Guid resumeId, [FromForm] FormVideo data)
         {
             var userId = User.Id();
 
@@ -1090,7 +1315,7 @@ namespace Sisbi.Controllers
 
             await using Stream fileStream = new FileStream(videoPath, FileMode.Create);
             await data.Video.CopyToAsync(fileStream);
-
+            //ffmpeg -i h_3840x2160_16:9.mp4 -vf scale=-2:1080 -vf scale=-2:480 -c:v libx264 -preset slow -crf 22 -c:a copy out.mp4
             var bash = new Bash();
             var frameCountCommand =
                 bash.Command(
@@ -1102,7 +1327,10 @@ namespace Sisbi.Controllers
                 Console.WriteLine(frameCountCommand.ErrorMsg);
             }
 
-            var frames = new List<int> {0, frameCount / 2, frameCount - 1};
+            var frame1 = (int) (frameCount * 0.05);
+            var frame2 = (int) (frameCount * 0.30);
+            var frame3 = (int) (frameCount * 0.75);
+            var frames = new List<int> {frame1, frame2, frame3};
 
             var oldPosters = resume.Posters.Where(p => p.Type == "system").ToList();
 
@@ -1283,7 +1511,7 @@ namespace Sisbi.Controllers
                 Name = newGuid.ToString(),
                 Format = data.Format,
                 Selected = true,
-                Number = 4,
+                Number = 0,
                 Type = "custom"
             });
 
