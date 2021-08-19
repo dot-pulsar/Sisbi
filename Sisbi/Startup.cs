@@ -45,8 +45,10 @@ namespace Sisbi
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<SisbiContext>(options =>
-                options.UseLazyLoadingProxies().UseNpgsql(Configuration.GetConnectionString("DefaultConnection")));
-
+            {
+                options.UseLazyLoadingProxies().UseNpgsql(Configuration.GetConnectionString("DefaultConnection"),
+                    b => b.MigrationsAssembly("Sisbi"));
+            });
             services.Configure<KestrelServerOptions>(options => { options.Limits.MaxRequestBodySize = int.MaxValue; });
 
             services.AddSignalR();

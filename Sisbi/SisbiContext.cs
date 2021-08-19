@@ -1,18 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Models.Entities;
-using Npgsql;
-using Org.BouncyCastle.Math.EC.Multiplier;
 
-namespace Models
+namespace Sisbi
 {
     public class SisbiContext : DbContext
     {
-        public SisbiContext(DbContextOptions<SisbiContext> options) : base(options)
+        public SisbiContext(DbContextOptions<SisbiContext> options)
+            : base(options)
         {
         }
 
@@ -30,17 +24,17 @@ namespace Models
         public DbSet<VacancyVideo> VacancyVideos { get; set; }
         public DbSet<VacancyPoster> VacancyPosters { get; set; }
 
-        private const string ConnectionString =
-            "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";
-
-        public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
-
-        private static NpgsqlConnection GetPostgresConnection()
-        {
-            var connection = new NpgsqlConnection(ConnectionString);
-            connection.Open();
-            return connection;
-        }
+        // private const string ConnectionString =
+        //     "Server=localhost; Port=5432; Database=sisbi_db; User Id=postgres;";
+        //
+        // public static NpgsqlConnection Connection { get; } = GetPostgresConnection();
+        //
+        // private static NpgsqlConnection GetPostgresConnection()
+        // {
+        //     var connection = new NpgsqlConnection(ConnectionString);
+        //     connection.Open();
+        //     return connection;
+        // }
 
         /*#region CRUD
 
